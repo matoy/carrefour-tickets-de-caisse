@@ -10,6 +10,8 @@ import {
   Award,
   Trash2,
   Tag,
+  Percent,
+  Package,
 } from "lucide-react";
 import type { ReceiptListItem } from "@/lib/db/receipt-service";
 
@@ -30,6 +32,7 @@ export function ReceiptDetailModal({
   if (!receipt) return null;
 
   const items = receipt.items ?? [];
+  const isMonoprix = receipt.retailer === "monoprix";
 
   async function handleDelete() {
     if (!receipt) return;
@@ -53,8 +56,21 @@ export function ReceiptDetailModal({
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <ReceiptIcon className="h-5 w-5 text-blue-600" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <ReceiptIcon
+                className={`h-5 w-5 ${
+                  isMonoprix ? "text-rose-600" : "text-blue-600"
+                }`}
+              />
+              <span
+                className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                  isMonoprix
+                    ? "bg-rose-100 text-rose-800"
+                    : "bg-blue-100 text-blue-800"
+                }`}
+              >
+                {isMonoprix ? "Monoprix" : "Carrefour"}
+              </span>
               <h2 className="text-lg font-bold text-slate-900">
                 {receipt.storeName}
               </h2>
@@ -74,7 +90,7 @@ export function ReceiptDetailModal({
                 </span>
               )}
               <span className="font-mono bg-slate-200/70 px-1.5 py-0.5 rounded text-slate-700">
-                Ticket {receipt.ticketKey}
+                {isMonoprix ? "Facture" : "Ticket"} {receipt.ticketKey}
               </span>
             </div>
           </div>
@@ -131,14 +147,19 @@ export function ReceiptDetailModal({
                           )}
                           {item.immediateDiscount > 0 && (
                             <span className="inline-flex items-center gap-0.5 text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded font-medium">
-                              <Tag className="h-3 w-3" />
-                              -{item.immediateDiscount.toFixed(2)} € immédiat
+                              <Tag className="h-3 w-3" />-
+                              {item.immediateDiscount.toFixed(2)} € promo
                             </span>
                           )}
                           {item.loyaltyDiscount > 0 && (
                             <span className="inline-flex items-center gap-0.5 text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium">
-                              <Award className="h-3 w-3" />
-                              -{item.loyaltyDiscount.toFixed(2)} € Club
+                              {isMonoprix ? (
+                                <Percent className="h-3 w-3" />
+                              ) : (
+                                <Award className="h-3 w-3" />
+                              )}
+                              -{item.loyaltyDiscount.toFixed(2)} €{" "}
+                              {isMonoprix ? "M+" : "Club"}
                             </span>
                           )}
                         </div>
@@ -166,24 +187,53 @@ export function ReceiptDetailModal({
           {/* Totals summary */}
           <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2 text-sm">
             <div className="flex justify-between text-slate-600">
-              <span>Total avant remises ({items.length} lignes)</span>
+              <span>Total brut articles ({items.length} lignes)</span>
               <span>{receipt.totalBeforeDiscount.toFixed(2)} €</span>
             </div>
             {receipt.totalImmediateDiscount > 0 && (
               <div className="flex justify-between text-rose-700 font-medium">
-                <span>Total remises immédiates</span>
+                <span>
+                  {isMonoprix
+                    ? "Total remises marchandises"
+                    : "Total remises immédiates"}
+                </span>
                 <span>-{receipt.totalImmediateDiscount.toFixed(2)} €</span>
               </div>
             )}
+            {receipt.globalDiscount > 0 && (
+              <div className="flex justify-between text-emerald-700 font-medium">
+                <span className="inline-flex items-center gap-1.5">
+                  <Percent className="h-4 w-4" />
+                  Remise abonnement M+ (-10%)
+                </span>
+                <span>-{receipt.globalDiscount.toFixed(2)} €</span>
+              </div>
+            )}
+            {receipt.extraFees !== 0 && (
+              <div className="flex justify-between text-slate-600">
+                <span className="inline-flex items-center gap-1.5">
+                  <Package className="h-4 w-4" />
+                  Frais préparation / livraison / consignes sacs (net)
+                </span>
+                <span>
+                  {receipt.extraFees > 0 ? "+" : ""}
+                  {receipt.extraFees.toFixed(2)} €
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-base font-bold text-slate-900 pt-2 border-t border-slate-200">
-              <span>Total payé en caisse</span>
+              <span>
+                {isMonoprix ? "Total de la commande" : "Total payé en caisse"}
+              </span>
               <span>{receipt.totalPaid.toFixed(2)} €</span>
             </div>
             {receipt.loyaltyCredited > 0 && (
               <div className="flex justify-between text-emerald-700 font-semibold pt-1">
                 <span className="inline-flex items-center gap-1.5">
                   <Award className="h-4 w-4" />
-                  Cagnotté sur Carte Club Carrefour
+                  {isMonoprix
+                    ? "Cagnotté Monoprix"
+                    : "Cagnotté sur Carte Club Carrefour"}
                 </span>
                 <span>+{receipt.loyaltyCredited.toFixed(2)} €</span>
               </div>
@@ -192,7 +242,7 @@ export function ReceiptDetailModal({
               <div className="flex justify-between text-xs text-slate-500 pt-2 border-t border-slate-200">
                 <span className="inline-flex items-center gap-1">
                   <CreditCard className="h-3.5 w-3.5" />
-                  Moyen de paiement
+                  Paiement / Canal
                 </span>
                 <span>{receipt.paymentMethod}</span>
               </div>
@@ -209,7 +259,7 @@ export function ReceiptDetailModal({
               className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600 hover:text-rose-700 cursor-pointer"
             >
               <Trash2 className="h-4 w-4" />
-              <span>Supprimer ce ticket</span>
+              <span>Supprimer ce document</span>
             </button>
           ) : (
             <div className="flex items-center gap-2">

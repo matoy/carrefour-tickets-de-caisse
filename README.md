@@ -1,20 +1,19 @@
-# Carrefour Tickets de Caisse — Comparateur & Historique
+# Mes Courses — Comparateur Carrefour vs Monoprix
 
-Application web **Next.js (App Router) + PostgreSQL (Drizzle ORM)** conçue pour centraliser vos tickets de caisse Carrefour et comparer instantanément vos prix passés lorsque vous faites vos courses en ligne chez Monoprix.
+Application web **Next.js (App Router) + PostgreSQL (Drizzle ORM)** pour centraliser vos **tickets de caisse Carrefour** et vos **factures PDF Monoprix Courses** afin de comparer vos prix réels (remises immédiates, -10% Club Carrefour et -10% remise abonnement M+ inclus).
 
 ## Fonctionnalités
 
-- **Comparateur Produits (Mode Monoprix)** :
-  - Recherche instantanée insensible aux accents et abréviations Carrefour (`ORAN` → `ORANGE`, `S/LACT` → `SANS LACTOSE`, `DCH` → `DOUCHE`, `BQ TOM` → `BARQUETTE TOMATE`, etc.).
-  - Affichage du **dernier prix affiché**, du **prix net réel** (remises immédiates et cagnotte -10% Club Carrefour déduites), du **prix au kg / au litre**, et de la tendance par rapport aux achats précédents.
-  - Comparateur Monoprix intégré sur chaque fiche produit avec calcul automatique du gain sur le caddie.
-- **Mes Tickets de Caisse** :
-  - Vue chronologique par magasin (Carrefour Market, Carrefour City) avec détail fidélité, remises et moyens de paiement.
-  - Masquage automatique du numéro de carte de fidélité avant stockage.
-- **Rapatriement des nouveaux tickets (sans doublons)** :
-  - **Bookmarklet 1-clic** directement depuis `carrefour.fr` (compatible Google Auth et contournement anti-bot Cloudflare/DataDome).
-  - **Synchronisation serveur** via Cookie / `Copy as cURL` / `.har`.
-  - **Import PDF par glisser-déposer** (ou scan du dossier local).
+- **Import PDF auto-détecté (Carrefour & Monoprix)** :
+  - **Carrefour** : extraction du magasin, articles, poids vrac (`€/kg`), remises immédiates, cagnotte -10% Club et masquage automatique du numéro de carte de fidélité.
+  - **Monoprix.fr Courses** : extraction du tableau multi-lignes, promos unitaires, répartition au prorata de la **remise abonnement M+ (-10%)** sur chaque produit, calcul des prix au kg/L, frais de préparation/consignes séparés, et masquage des données personnelles.
+  - Déduplication automatique pour ne jamais réimporter un ticket ou une facture déjà en base.
+- **Duel Carrefour vs Monoprix** :
+  - Associez les produits équivalents entre enseignes (avec suggestions automatiques en 1 clic), comparez à l'unité ou au **kg / litre**, et voyez instantanément où chaque produit coûte le moins cher.
+- **Catalogue & Recherche unifiée** :
+  - Recherche instantanée multi-mots insensible aux accents et abréviations Carrefour (`ORAN` → `ORANGE`, `S/LACT` → `SANS LACTOSE`, `DCH` → `DOUCHE`, etc.) avec filtre par enseigne.
+- **Mes Tickets & Factures** :
+  - Historique chronologique par enseigne (Carrefour Market, Carrefour City, Monoprix.fr Courses) avec détail complet.
 
 ## Démarrage en local
 
@@ -23,18 +22,18 @@ npm install
 npm run dev
 ```
 
-Sans variable `DATABASE_URL`, l'application démarre automatiquement avec **PGlite** (PostgreSQL embarqué persisté dans `.pgdata/`) et importe les éventuels fichiers `*_ticket.pdf` présents à la racine (ignorés par `.gitignore`).
+Sans variable `DATABASE_URL`, l'application démarre automatiquement avec **PGlite** (PostgreSQL embarqué) et importe les éventuels fichiers `.pdf` présents à la racine (ignorés par `.gitignore`).
 
 ## Déploiement sur Vercel Hobby + Neon PostgreSQL
 
-1. Créez une base **Neon Postgres** (directement depuis l'onglet *Storage* sur Vercel ou sur neon.tech).
+1. Créez une base **Neon Postgres** (depuis l'onglet *Storage* sur Vercel ou sur neon.tech).
 2. Configurez les variables d'environnement sur Vercel :
    - `DATABASE_URL` : votre URL PostgreSQL Neon (`postgresql://...`).
    - `APP_PASSWORD` : mot de passe pour verrouiller l'accès à l'interface web.
    - `AUTH_SECRET` *(optionnel)* : chaîne aléatoire pour signer les cookies de session.
-3. Déployez sur Vercel : les tables PostgreSQL sont créées automatiquement au premier démarrage (ou via `npm run db:push`).
+3. Déployez sur Vercel : les tables PostgreSQL sont créées/migrées automatiquement au premier démarrage.
 
-## Vérification du parser
+## Vérification
 
 ```bash
 npm run verify:parser

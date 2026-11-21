@@ -5,11 +5,13 @@ import {
   timestamp,
   numeric,
   integer,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const receipts = pgTable("receipts", {
   id: serial("id").primaryKey(),
   externalId: text("external_id").notNull().unique(),
+  retailer: text("retailer").notNull().default("carrefour"),
   ticketKey: text("ticket_key").notNull(),
   storeName: text("store_name").notNull(),
   storeCode: text("store_code"),
@@ -19,6 +21,18 @@ export const receipts = pgTable("receipts", {
     scale: 2,
   }).notNull(),
   totalImmediateDiscount: numeric("total_immediate_discount", {
+    precision: 10,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+  globalDiscount: numeric("global_discount", {
+    precision: 10,
+    scale: 2,
+  })
+    .notNull()
+    .default("0"),
+  extraFees: numeric("extra_fees", {
     precision: 10,
     scale: 2,
   })
@@ -91,6 +105,34 @@ export const productNotes = pgTable("product_notes", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const productComparisons = pgTable("product_comparisons", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  compareMode: text("compare_mode").notNull().default("unit"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const productComparisonLinks = pgTable(
+  "product_comparison_links",
+  {
+    id: serial("id").primaryKey(),
+    comparisonId: integer("comparison_id")
+      .notNull()
+      .references(() => productComparisons.id, { onDelete: "cascade" }),
+    retailer: text("retailer").notNull(),
+    rawLabel: text("raw_label").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_comparison_link_unique").on(
+      table.comparisonId,
+      table.retailer,
+      table.rawLabel
+    ),
+  ]
+);
+
 export const syncSettings = pgTable("sync_settings", {
   id: serial("id").primaryKey(),
   key: text("key").notNull().unique(),
@@ -103,4 +145,6 @@ export type NewReceipt = typeof receipts.$inferInsert;
 export type ReceiptItem = typeof receiptItems.$inferSelect;
 export type NewReceiptItem = typeof receiptItems.$inferInsert;
 export type ProductNote = typeof productNotes.$inferSelect;
+export type ProductComparison = typeof productComparisons.$inferSelect;
+export type ProductComparisonLink = typeof productComparisonLinks.$inferSelect;
 export type SyncSetting = typeof syncSettings.$inferSelect;

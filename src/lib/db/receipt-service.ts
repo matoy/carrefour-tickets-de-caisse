@@ -9,14 +9,16 @@ import {
   syncSettings,
 } from "./schema";
 import {
-  parseCarrefourReceiptPdf,
+  parseReceiptPdf,
   type ParsedReceipt,
-} from "../parser/carrefour-pdf";
+  type Retailer,
+} from "../parser";
 import { stripAccents } from "../parser/normalize";
 
 export interface UpsertResult {
   inserted: boolean;
   skipped: boolean;
+  retailer: Retailer;
   externalId: string;
   ticketKey: string;
   storeName: string;
@@ -26,11 +28,11 @@ export interface UpsertResult {
 }
 
 /**
- * Insert a parsed receipt and all its line items if externalId is not already in DB.
+ * Insert a parsed receipt (Carrefour or Monoprix) and all its line items if externalId is not already in DB.
  */
 export async function insertParsedReceiptIfNew(
   parsed: ParsedReceipt,
-  source: "carrefour_sync" | "pdf_upload" | "local_seed"
+  source: "pdf_upload" | "local_seed"
 ): Promise<UpsertResult> {
   const db = await ensureDbInitialized();
 
@@ -44,6 +46,7 @@ export async function insertParsedReceiptIfNew(
     return {
       inserted: false,
       skipped: true,
+      retailer: parsed.retailer,
       externalId: parsed.externalId,
       ticketKey: parsed.ticketKey,
       storeName: parsed.storeName,
@@ -57,12 +60,15 @@ export async function insertParsedReceiptIfNew(
     .insert(receipts)
     .values({
       externalId: parsed.externalId,
+      retailer: parsed.retailer,
       ticketKey: parsed.ticketKey,
       storeName: parsed.storeName,
       storeCode: parsed.storeCode,
       purchaseDate: parsed.purchaseDate,
       totalBeforeDiscount: parsed.totalBeforeDiscount.toFixed(2),
       totalImmediateDiscount: parsed.totalImmediateDiscount.toFixed(2),
+      globalDiscount: parsed.globalDiscount.toFixed(2),
+      extraFees: parsed.extraFees.toFixed(2),
       totalPaid: parsed.totalPaid.toFixed(2),
       loyaltyCredited: parsed.loyaltyCredited.toFixed(2),
       paymentMethod: parsed.paymentMethod,
@@ -78,6 +84,7 @@ export async function insertParsedReceiptIfNew(
     return {
       inserted: false,
       skipped: true,
+      retailer: parsed.retailer,
       externalId: parsed.externalId,
       ticketKey: parsed.ticketKey,
       storeName: parsed.storeName,
@@ -118,7 +125,6 @@ export async function insertParsedReceiptIfNew(
       );
     }
   } catch (err) {
-    // Clean up orphaned receipt header if inserting items failed
     await db.delete(receipts).where(eq(receipts.id, receiptId));
     throw err;
   }
@@ -126,6 +132,7 @@ export async function insertParsedReceiptIfNew(
   return {
     inserted: true,
     skipped: false,
+    retailer: parsed.retailer,
     externalId: parsed.externalId,
     ticketKey: parsed.ticketKey,
     storeName: parsed.storeName,
@@ -136,7 +143,7 @@ export async function insertParsedReceiptIfNew(
 }
 
 /**
- * Import all *_ticket.pdf files found in the workspace root directory.
+ * Import all *.pdf files (Carrefour & Monoprix) found in the workspace root directory.
  */
 export async function syncLocalWorkspacePdfs(): Promise<{
   foundFiles: string[];
@@ -163,7 +170,7 @@ export async function syncLocalWorkspacePdfs(): Promise<{
     try {
       const fullPath = path.join(rootDir, fileName);
       const buffer = fs.readFileSync(fullPath);
-      const parsed = await parseCarrefourReceiptPdf(buffer, fileName);
+      const parsed = await parseReceiptPdf(buffer, fileName);
       const res = await insertParsedReceiptIfNew(parsed, "local_seed");
       results.push(res);
     } catch (err) {
@@ -224,25 +231,6 @@ export async function setSyncSetting(
     });
 }
 
-export interface ReceiptListItem {
-  id: number;
-  externalId: string;
-  ticketKey: string;
-  storeName: string;
-  storeCode: string | null;
-  purchaseDate: string;
-  totalBeforeDiscount: number;
-  totalImmediateDiscount: number;
-  totalPaid: number;
-  loyaltyCredited: number;
-  paymentMethod: string | null;
-  barcode: string | null;
-  source: string;
-  fileName: string | null;
-  itemCount: number;
-  items?: ReceiptDetailItem[];
-}
-
 export interface ReceiptDetailItem {
   id: number;
   lineIndex: number;
@@ -263,16 +251,49 @@ export interface ReceiptDetailItem {
   unitType: string | null;
 }
 
+export interface ReceiptListItem {
+  id: number;
+  retailer: Retailer;
+  externalId: string;
+  ticketKey: string;
+  storeName: string;
+  storeCode: string | null;
+  purchaseDate: string;
+  totalBeforeDiscount: number;
+  totalImmediateDiscount: number;
+  globalDiscount: number;
+  extraFees: number;
+  totalPaid: number;
+  loyaltyCredited: number;
+  paymentMethod: string | null;
+  barcode: string | null;
+  source: string;
+  fileName: string | null;
+  itemCount: number;
+  items?: ReceiptDetailItem[];
+}
+
+export interface ReceiptStatsSummary {
+  totalReceipts: number;
+  carrefourCount: number;
+  monoprixCount: number;
+  totalSpent: number;
+  carrefourSpent: number;
+  monoprixSpent: number;
+  totalImmediateSaved: number;
+  totalGlobalDiscount: number;
+  totalLoyaltySaved: number;
+  totalSaved: number;
+  lastSyncAt: string | null;
+}
+
+function toRetailer(val: string | null | undefined): Retailer {
+  return val === "monoprix" ? "monoprix" : "carrefour";
+}
+
 export async function listReceipts(includeItems = false): Promise<{
   receipts: ReceiptListItem[];
-  stats: {
-    totalReceipts: number;
-    totalSpent: number;
-    totalImmediateSaved: number;
-    totalLoyaltySaved: number;
-    totalSaved: number;
-    lastSyncAt: string | null;
-  };
+  stats: ReceiptStatsSummary;
 }> {
   await autoSeedIfEmpty();
   const db = await ensureDbInitialized();
@@ -330,6 +351,7 @@ export async function listReceipts(includeItems = false): Promise<{
     const receiptItemList = itemsByReceipt.get(r.id) ?? [];
     return {
       id: r.id,
+      retailer: toRetailer(r.retailer),
       externalId: r.externalId,
       ticketKey: r.ticketKey,
       storeName: r.storeName,
@@ -337,6 +359,8 @@ export async function listReceipts(includeItems = false): Promise<{
       purchaseDate: r.purchaseDate.toISOString(),
       totalBeforeDiscount: Number(r.totalBeforeDiscount),
       totalImmediateDiscount: Number(r.totalImmediateDiscount),
+      globalDiscount: Number(r.globalDiscount),
+      extraFees: Number(r.extraFees),
       totalPaid: Number(r.totalPaid),
       loyaltyCredited: Number(r.loyaltyCredited),
       paymentMethod: r.paymentMethod,
@@ -348,9 +372,18 @@ export async function listReceipts(includeItems = false): Promise<{
     };
   });
 
+  const carrefourRows = rows.filter((r) => toRetailer(r.retailer) === "carrefour");
+  const monoprixRows = rows.filter((r) => toRetailer(r.retailer) === "monoprix");
+
   const totalSpent = rows.reduce((s, r) => s + Number(r.totalPaid), 0);
+  const carrefourSpent = carrefourRows.reduce((s, r) => s + Number(r.totalPaid), 0);
+  const monoprixSpent = monoprixRows.reduce((s, r) => s + Number(r.totalPaid), 0);
   const totalImmediateSaved = rows.reduce(
     (s, r) => s + Number(r.totalImmediateDiscount),
+    0
+  );
+  const totalGlobalDiscount = rows.reduce(
+    (s, r) => s + Number(r.globalDiscount),
     0
   );
   const totalLoyaltySaved = rows.reduce(
@@ -363,11 +396,18 @@ export async function listReceipts(includeItems = false): Promise<{
     receipts: formatted,
     stats: {
       totalReceipts: rows.length,
+      carrefourCount: carrefourRows.length,
+      monoprixCount: monoprixRows.length,
       totalSpent: Math.round(totalSpent * 100) / 100,
+      carrefourSpent: Math.round(carrefourSpent * 100) / 100,
+      monoprixSpent: Math.round(monoprixSpent * 100) / 100,
       totalImmediateSaved: Math.round(totalImmediateSaved * 100) / 100,
+      totalGlobalDiscount: Math.round(totalGlobalDiscount * 100) / 100,
       totalLoyaltySaved: Math.round(totalLoyaltySaved * 100) / 100,
       totalSaved:
-        Math.round((totalImmediateSaved + totalLoyaltySaved) * 100) / 100,
+        Math.round(
+          (totalImmediateSaved + totalGlobalDiscount + totalLoyaltySaved) * 100
+        ) / 100,
       lastSyncAt,
     },
   };
@@ -375,6 +415,7 @@ export async function listReceipts(includeItems = false): Promise<{
 
 export interface AggregatedProductHistoryEntry {
   receiptId: number;
+  retailer: Retailer;
   ticketKey: string;
   storeName: string;
   purchaseDate: string;
@@ -393,6 +434,8 @@ export interface AggregatedProductHistoryEntry {
 }
 
 export interface AggregatedProduct {
+  key: string;
+  retailer: Retailer;
   rawLabel: string;
   normalizedLabel: string;
   customName: string | null;
@@ -420,7 +463,8 @@ export interface AggregatedProduct {
 }
 
 export async function listAggregatedProducts(
-  query?: string
+  query?: string,
+  retailerFilter?: Retailer | "all"
 ): Promise<AggregatedProduct[]> {
   await autoSeedIfEmpty();
   const db = await ensureDbInitialized();
@@ -430,6 +474,7 @@ export async function listAggregatedProducts(
       item: receiptItems,
       receipt: {
         id: receipts.id,
+        retailer: receipts.retailer,
         ticketKey: receipts.ticketKey,
         storeName: receipts.storeName,
         purchaseDate: receipts.purchaseDate,
@@ -445,6 +490,8 @@ export async function listAggregatedProducts(
   const groups = new Map<
     string,
     {
+      key: string;
+      retailer: Retailer;
       rawLabel: string;
       normalizedLabel: string;
       history: AggregatedProductHistoryEntry[];
@@ -454,18 +501,28 @@ export async function listAggregatedProducts(
   for (const row of joined) {
     const it = row.item;
     const rec = row.receipt;
-    let group = groups.get(it.rawLabel);
+    const retailer = toRetailer(rec.retailer);
+
+    if (retailerFilter && retailerFilter !== "all" && retailer !== retailerFilter) {
+      continue;
+    }
+
+    const groupKey = `${retailer}::${it.rawLabel}`;
+    let group = groups.get(groupKey);
     if (!group) {
       group = {
+        key: groupKey,
+        retailer,
         rawLabel: it.rawLabel,
         normalizedLabel: it.normalizedLabel,
         history: [],
       };
-      groups.set(it.rawLabel, group);
+      groups.set(groupKey, group);
     }
 
     group.history.push({
       receiptId: rec.id,
+      retailer,
       ticketKey: rec.ticketKey,
       storeName: rec.storeName,
       purchaseDate: rec.purchaseDate.toISOString(),
@@ -497,7 +554,7 @@ export async function listAggregatedProducts(
   for (const group of groups.values()) {
     const note = notesMap.get(group.rawLabel);
     const searchable = stripAccents(
-      `${group.rawLabel} ${group.normalizedLabel} ${note?.customName ?? ""} ${note?.notes ?? ""}`
+      `${group.retailer} ${group.rawLabel} ${group.normalizedLabel} ${note?.customName ?? ""} ${note?.notes ?? ""}`
     );
 
     if (
@@ -507,11 +564,9 @@ export async function listAggregatedProducts(
       continue;
     }
 
-    // History is ordered most recent first
     const latest = group.history[0];
     const totalQuantity = group.history.reduce((s, h) => s + h.quantity, 0);
 
-    // For weighted items (e.g. Patate douce vrac), use pricePerKgOrL to compare across dates if available
     const unitPrices = group.history.map((h) => h.unitPrice);
     const netUnitPrices = group.history.map((h) => h.netUnitPrice);
     const kgPrices = group.history
@@ -533,10 +588,8 @@ export async function listAggregatedProducts(
     let priceTrendPct: number | null = null;
     if (group.history.length >= 2) {
       const oldest = group.history[group.history.length - 1];
-      const latestComp =
-        latest.pricePerKgOrL ?? latest.unitPrice;
-      const oldestComp =
-        oldest.pricePerKgOrL ?? oldest.unitPrice;
+      const latestComp = latest.pricePerKgOrL ?? latest.unitPrice;
+      const oldestComp = oldest.pricePerKgOrL ?? oldest.unitPrice;
       if (oldestComp > 0 && latestComp !== oldestComp) {
         priceTrendPct =
           Math.round(((latestComp - oldestComp) / oldestComp) * 1000) / 10;
@@ -544,6 +597,8 @@ export async function listAggregatedProducts(
     }
 
     products.push({
+      key: group.key,
+      retailer: group.retailer,
       rawLabel: group.rawLabel,
       normalizedLabel: group.normalizedLabel,
       customName: note?.customName ?? null,

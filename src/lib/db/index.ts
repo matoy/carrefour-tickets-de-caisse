@@ -20,12 +20,15 @@ const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS receipts (
     id SERIAL PRIMARY KEY,
     external_id TEXT NOT NULL UNIQUE,
+    retailer TEXT NOT NULL DEFAULT 'carrefour',
     ticket_key TEXT NOT NULL,
     store_name TEXT NOT NULL,
     store_code TEXT,
     purchase_date TIMESTAMP NOT NULL,
     total_before_discount NUMERIC(10, 2) NOT NULL,
     total_immediate_discount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    global_discount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    extra_fees NUMERIC(10, 2) NOT NULL DEFAULT 0,
     total_paid NUMERIC(10, 2) NOT NULL,
     loyalty_credited NUMERIC(10, 2) NOT NULL DEFAULT 0,
     payment_method TEXT,
@@ -35,6 +38,9 @@ const SCHEMA_STATEMENTS = [
     raw_text TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
   )`,
+  `ALTER TABLE receipts ADD COLUMN IF NOT EXISTS retailer TEXT NOT NULL DEFAULT 'carrefour'`,
+  `ALTER TABLE receipts ADD COLUMN IF NOT EXISTS global_discount NUMERIC(10, 2) NOT NULL DEFAULT 0`,
+  `ALTER TABLE receipts ADD COLUMN IF NOT EXISTS extra_fees NUMERIC(10, 2) NOT NULL DEFAULT 0`,
   `CREATE TABLE IF NOT EXISTS receipt_items (
     id SERIAL PRIMARY KEY,
     receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
@@ -64,6 +70,21 @@ const SCHEMA_STATEMENTS = [
     notes TEXT,
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
   )`,
+  `CREATE TABLE IF NOT EXISTS product_comparisons (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    compare_mode TEXT NOT NULL DEFAULT 'unit',
+    notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE TABLE IF NOT EXISTS product_comparison_links (
+    id SERIAL PRIMARY KEY,
+    comparison_id INTEGER NOT NULL REFERENCES product_comparisons(id) ON DELETE CASCADE,
+    retailer TEXT NOT NULL,
+    raw_label TEXT NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_comparison_link_unique ON product_comparison_links(comparison_id, retailer, raw_label)`,
   `CREATE TABLE IF NOT EXISTS sync_settings (
     id SERIAL PRIMARY KEY,
     key TEXT NOT NULL UNIQUE,
@@ -73,6 +94,7 @@ const SCHEMA_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt_id ON receipt_items(receipt_id)`,
   `CREATE INDEX IF NOT EXISTS idx_receipt_items_raw_label ON receipt_items(raw_label)`,
   `CREATE INDEX IF NOT EXISTS idx_receipts_purchase_date ON receipts(purchase_date DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_receipts_retailer ON receipts(retailer)`,
 ];
 
 function createDbInstance(): { db: AppDb; isPostgresUrl: boolean } {

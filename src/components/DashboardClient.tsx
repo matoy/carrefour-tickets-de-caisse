@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
-  RefreshCw,
+  Upload,
   ShoppingCart,
   Receipt as ReceiptIcon,
   TrendingDown,
@@ -22,44 +22,53 @@ import {
   Scale,
   Tag,
   Lock,
-  Scale as CompareIcon,
+  Swords,
+  Percent,
 } from "lucide-react";
 import type {
   AggregatedProduct,
   ReceiptListItem,
+  ReceiptStatsSummary,
 } from "@/lib/db/receipt-service";
+import type {
+  ProductComparisonView,
+  SuggestedComparisonMatch,
+} from "@/lib/db/comparison-service";
 import { stripAccents } from "@/lib/parser/normalize";
 import { SyncModal } from "./SyncModal";
 import { ReceiptDetailModal } from "./ReceiptDetailModal";
-
-interface StatsSummary {
-  totalReceipts: number;
-  totalSpent: number;
-  totalImmediateSaved: number;
-  totalLoyaltySaved: number;
-  totalSaved: number;
-  lastSyncAt: string | null;
-}
+import { DuelComparisonTab } from "./DuelComparisonTab";
 
 interface DashboardClientProps {
   initialReceipts: ReceiptListItem[];
-  initialStats: StatsSummary;
+  initialStats: ReceiptStatsSummary;
   initialProducts: AggregatedProduct[];
-  syncToken: string;
-  hasSavedSession: boolean;
+  initialComparisons: ProductComparisonView[];
+  initialSuggestions: SuggestedComparisonMatch[];
   authEnabled: boolean;
   isRemotePostgres: boolean;
 }
 
-type MainTab = "comparator" | "receipts";
+type MainTab = "duel" | "catalog" | "receipts";
+type RetailerFilter = "all" | "carrefour" | "monoprix";
 type ProductFilter = "all" | "discounts" | "weighted" | "monoprix";
 type ProductSort = "recent" | "name" | "price_asc" | "most_bought" | "savings";
 type CompareBasis = "net" | "shelf";
+type StoreFilter = "all" | "market" | "city" | "monoprix";
 
-function formatStoreBadge(storeName: string): {
+function formatStoreBadge(
+  storeName: string,
+  retailer: "carrefour" | "monoprix"
+): {
   label: string;
   colorClass: string;
 } {
+  if (retailer === "monoprix") {
+    return {
+      label: storeName,
+      colorClass: "bg-rose-100 text-rose-800 border-rose-300",
+    };
+  }
   if (/city/i.test(storeName)) {
     return {
       label: storeName.replace(/_/g, " "),
@@ -69,7 +78,7 @@ function formatStoreBadge(storeName: string): {
   if (/market/i.test(storeName)) {
     return {
       label: storeName.replace(/_/g, " "),
-      colorClass: "bg-rose-100 text-rose-800 border-rose-300",
+      colorClass: "bg-blue-100 text-blue-800 border-blue-300",
     };
   }
   return {
@@ -82,24 +91,33 @@ export function DashboardClient({
   initialReceipts,
   initialStats,
   initialProducts,
-  syncToken,
-  hasSavedSession,
+  initialComparisons,
+  initialSuggestions,
   authEnabled,
   isRemotePostgres,
 }: DashboardClientProps) {
   const router = useRouter();
   const [receiptsList, setReceiptsList] =
     useState<ReceiptListItem[]>(initialReceipts);
-  const [stats, setStats] = useState<StatsSummary>(initialStats);
+  const [stats, setStats] = useState<ReceiptStatsSummary>(initialStats);
   const [products, setProducts] =
     useState<AggregatedProduct[]>(initialProducts);
+  const [comparisons, setComparisons] =
+    useState<ProductComparisonView[]>(initialComparisons);
+  const [suggestions, setSuggestions] =
+    useState<SuggestedComparisonMatch[]>(initialSuggestions);
 
-  const [activeTab, setActiveTab] = useState<MainTab>("comparator");
+  const [activeTab, setActiveTab] = useState<MainTab>(
+    initialComparisons.length > 0 || initialStats.monoprixCount > 0
+      ? "duel"
+      : "catalog"
+  );
   const [searchQuery, setSearchQuery] = useState("");
+  const [retailerFilter, setRetailerFilter] = useState<RetailerFilter>("all");
   const [productFilter, setProductFilter] = useState<ProductFilter>("all");
   const [productSort, setProductSort] = useState<ProductSort>("recent");
   const [compareBasis, setCompareBasis] = useState<CompareBasis>("net");
-  const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [storeFilter, setStoreFilter] = useState<StoreFilter>("all");
 
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [editingNameFor, setEditingNameFor] = useState<string | null>(null);
@@ -108,7 +126,7 @@ export function DashboardClient({
     () => {
       const map: Record<string, string> = {};
       for (const p of initialProducts) {
-        if (p.monoprixPrice !== null) {
+        if (p.retailer === "carrefour" && p.monoprixPrice !== null) {
           map[p.rawLabel] = p.monoprixPrice.toFixed(2);
         }
       }
@@ -116,6 +134,8 @@ export function DashboardClient({
     }
   );
   const [savingNoteFor, setSavingNoteFor] = useState<string | null>(null);
+  const [preselectedForDuel, setPreselectedForDuel] =
+    useState<AggregatedProduct | null>(null);
 
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] =
@@ -125,14 +145,15 @@ export function DashboardClient({
   async function refreshAllData() {
     setRefreshing(true);
     try {
-      const [recRes, prodRes] = await Promise.all([
+      const [recRes, prodRes, compRes] = await Promise.all([
         fetch("/api/receipts?includeItems=true"),
         fetch("/api/products"),
+        fetch("/api/comparisons"),
       ]);
       if (recRes.ok) {
         const recData = (await recRes.json()) as {
           receipts: ReceiptListItem[];
-          stats: StatsSummary;
+          stats: ReceiptStatsSummary;
         };
         setReceiptsList(recData.receipts);
         setStats(recData.stats);
@@ -145,15 +166,39 @@ export function DashboardClient({
         setMonoprixDrafts((prev) => {
           const next = { ...prev };
           for (const p of prodData.products) {
-            if (p.monoprixPrice !== null && next[p.rawLabel] === undefined) {
+            if (
+              p.retailer === "carrefour" &&
+              p.monoprixPrice !== null &&
+              next[p.rawLabel] === undefined
+            ) {
               next[p.rawLabel] = p.monoprixPrice.toFixed(2);
             }
           }
           return next;
         });
       }
+      if (compRes.ok) {
+        const compData = (await compRes.json()) as {
+          comparisons: ProductComparisonView[];
+          suggestions: SuggestedComparisonMatch[];
+        };
+        setComparisons(compData.comparisons);
+        setSuggestions(compData.suggestions);
+      }
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function refreshComparisonsOnly() {
+    const compRes = await fetch("/api/comparisons");
+    if (compRes.ok) {
+      const compData = (await compRes.json()) as {
+        comparisons: ProductComparisonView[];
+        suggestions: SuggestedComparisonMatch[];
+      };
+      setComparisons(compData.comparisons);
+      setSuggestions(compData.suggestions);
     }
   }
 
@@ -222,11 +267,12 @@ export function DashboardClient({
     router.refresh();
   }
 
-  function getCarrefourRefPrice(p: AggregatedProduct): {
+  function getProductRefPrice(p: AggregatedProduct): {
     price: number;
     unitLabel: string;
   } {
-    const usePerKg = p.monoprixUnit === "per_kg_or_l" && p.lastPricePerKgOrL !== null;
+    const usePerKg =
+      p.monoprixUnit === "per_kg_or_l" && p.lastPricePerKgOrL !== null;
     if (usePerKg) {
       const price =
         compareBasis === "net" && p.lastNetPricePerKgOrL !== null
@@ -238,8 +284,7 @@ export function DashboardClient({
       };
     }
 
-    const price =
-      compareBasis === "net" ? p.lastNetUnitPrice : p.lastUnitPrice;
+    const price = compareBasis === "net" ? p.lastNetUnitPrice : p.lastUnitPrice;
     return {
       price,
       unitLabel: "€",
@@ -252,9 +297,13 @@ export function DashboardClient({
       .filter((t) => t.length > 0);
 
     const list = products.filter((p) => {
+      if (retailerFilter !== "all" && p.retailer !== retailerFilter) {
+        return false;
+      }
+
       if (tokens.length > 0) {
         const hay = stripAccents(
-          `${p.rawLabel} ${p.normalizedLabel} ${p.customName ?? ""}`
+          `${p.retailer} ${p.rawLabel} ${p.normalizedLabel} ${p.customName ?? ""}`
         );
         if (!tokens.every((t) => hay.includes(t))) return false;
       }
@@ -268,7 +317,7 @@ export function DashboardClient({
         return p.lastPricePerKgOrL !== null;
       }
       if (productFilter === "monoprix") {
-        return p.monoprixPrice !== null;
+        return p.retailer === "carrefour" && p.monoprixPrice !== null;
       }
       return true;
     });
@@ -281,23 +330,22 @@ export function DashboardClient({
         );
       }
       if (productSort === "price_asc") {
-        return getCarrefourRefPrice(a).price - getCarrefourRefPrice(b).price;
+        return getProductRefPrice(a).price - getProductRefPrice(b).price;
       }
       if (productSort === "most_bought") {
         return b.totalQuantity - a.totalQuantity;
       }
       if (productSort === "savings") {
         const savA =
-          a.monoprixPrice !== null
-            ? a.monoprixPrice - getCarrefourRefPrice(a).price
+          a.retailer === "carrefour" && a.monoprixPrice !== null
+            ? a.monoprixPrice - getProductRefPrice(a).price
             : -9999;
         const savB =
-          b.monoprixPrice !== null
-            ? b.monoprixPrice - getCarrefourRefPrice(b).price
+          b.retailer === "carrefour" && b.monoprixPrice !== null
+            ? b.monoprixPrice - getProductRefPrice(b).price
             : -9999;
         return savB - savA;
       }
-      // recent
       return (
         new Date(b.lastPurchaseDate).getTime() -
         new Date(a.lastPurchaseDate).getTime()
@@ -306,40 +354,22 @@ export function DashboardClient({
 
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, searchQuery, productFilter, productSort, compareBasis]);
-
-  const monoprixSummary = useMemo(() => {
-    let count = 0;
-    let totalCarrefour = 0;
-    let totalMonoprix = 0;
-    let cheaperAtCarrefour = 0;
-    let cheaperAtMonoprix = 0;
-
-    for (const p of products) {
-      if (p.monoprixPrice === null) continue;
-      count++;
-      const ref = getCarrefourRefPrice(p).price;
-      totalCarrefour += ref;
-      totalMonoprix += p.monoprixPrice;
-      if (ref < p.monoprixPrice - 0.005) cheaperAtCarrefour++;
-      else if (p.monoprixPrice < ref - 0.005) cheaperAtMonoprix++;
-    }
-
-    return {
-      count,
-      totalCarrefour: Math.round(totalCarrefour * 100) / 100,
-      totalMonoprix: Math.round(totalMonoprix * 100) / 100,
-      diff: Math.round((totalMonoprix - totalCarrefour) * 100) / 100,
-      cheaperAtCarrefour,
-      cheaperAtMonoprix,
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, compareBasis]);
+  }, [
+    products,
+    searchQuery,
+    retailerFilter,
+    productFilter,
+    productSort,
+    compareBasis,
+  ]);
 
   const filteredReceipts = useMemo(() => {
     return receiptsList.filter((r) => {
-      if (storeFilter === "market") return /market/i.test(r.storeName);
-      if (storeFilter === "city") return /city/i.test(r.storeName);
+      if (storeFilter === "market")
+        return r.retailer === "carrefour" && /market/i.test(r.storeName);
+      if (storeFilter === "city")
+        return r.retailer === "carrefour" && /city/i.test(r.storeName);
+      if (storeFilter === "monoprix") return r.retailer === "monoprix";
       return true;
     });
   }, [receiptsList, storeFilter]);
@@ -350,13 +380,13 @@ export function DashboardClient({
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-white flex items-center justify-center shadow-sm">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-rose-600 text-white flex items-center justify-center shadow-sm">
               <ShoppingCart className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold tracking-tight text-slate-900">
-                  Mes Tickets Carrefour
+                  Mes Courses — Carrefour vs Monoprix
                 </h1>
                 <span
                   className={`hidden sm:inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${
@@ -376,8 +406,8 @@ export function DashboardClient({
                 )}
               </div>
               <p className="text-xs text-slate-500">
-                Comparateur de prix pour vos courses en ligne Monoprix &
-                historique centralisé
+                Comparez vos prix nets réels (-10% Club Carrefour & -10% remise
+                M+) sur tous vos achats PDF
               </p>
             </div>
           </div>
@@ -388,10 +418,10 @@ export function DashboardClient({
               onClick={() => setSyncModalOpen(true)}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm transition cursor-pointer"
             >
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+              <Upload
+                className={`h-4 w-4 ${refreshing ? "animate-pulse" : ""}`}
               />
-              <span>Rapatrier les nouveaux tickets</span>
+              <span>Importer des PDF</span>
             </button>
 
             {authEnabled && (
@@ -413,42 +443,42 @@ export function DashboardClient({
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
             <div className="text-xs font-medium text-slate-500 flex items-center justify-between">
-              <span>Tickets enregistrés</span>
+              <span>Documents importés</span>
               <ReceiptIcon className="h-4 w-4 text-blue-600" />
             </div>
             <div className="text-2xl font-bold text-slate-900 mt-1">
               {stats.totalReceipts}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              {stats.lastSyncAt
-                ? `Synchro : ${new Date(stats.lastSyncAt).toLocaleDateString("fr-FR")}`
-                : "Base prête"}
+              {stats.carrefourCount} Carrefour · {stats.monoprixCount} Monoprix
             </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
             <div className="text-xs font-medium text-slate-500 flex items-center justify-between">
-              <span>Produits référencés</span>
-              <Tag className="h-4 w-4 text-indigo-600" />
+              <span>Produits & Duels</span>
+              <Swords className="h-4 w-4 text-indigo-600" />
             </div>
             <div className="text-2xl font-bold text-slate-900 mt-1">
               {products.length}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              {monoprixSummary.count} comparé(s) avec Monoprix
+              {comparisons.length} duel(s) actif(s) · {suggestions.length}{" "}
+              suggestion(s)
             </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
             <div className="text-xs font-medium text-slate-500 flex items-center justify-between">
-              <span>Total payé en caisse</span>
+              <span>Total dépensé</span>
               <ShoppingCart className="h-4 w-4 text-slate-600" />
             </div>
             <div className="text-2xl font-bold text-slate-900 mt-1">
               {stats.totalSpent.toFixed(2)} €
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              Cumul sur {stats.totalReceipts} ticket(s)
+              {stats.carrefourSpent.toFixed(2)} € CRF ·{" "}
+              {stats.monoprixSpent.toFixed(2)} € MNP
             </div>
           </div>
 
@@ -461,97 +491,83 @@ export function DashboardClient({
               {stats.totalSaved.toFixed(2)} €
             </div>
             <div className="text-xs text-emerald-700/80 mt-0.5">
-              {stats.totalImmediateSaved.toFixed(2)} € promos +{" "}
+              {stats.totalImmediateSaved.toFixed(2)} € promos ·{" "}
+              {stats.totalGlobalDiscount.toFixed(2)} € M+ ·{" "}
               {stats.totalLoyaltySaved.toFixed(2)} € Club
             </div>
           </div>
         </section>
 
-        {/* Monoprix Comparison Summary Bar (when at least 1 item has Monoprix price) */}
-        {monoprixSummary.count > 0 && (
-          <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
-                <CompareIcon className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-indigo-950">
-                  Comparatif Caddie Monoprix ({monoprixSummary.count} article
-                  {monoprixSummary.count > 1 ? "s" : ""})
-                </h2>
-                <p className="text-xs text-indigo-800">
-                  {monoprixSummary.cheaperAtCarrefour} moins cher(s) chez
-                  Carrefour · {monoprixSummary.cheaperAtMonoprix} moins cher(s)
-                  chez Monoprix
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-6 text-sm">
-              <div>
-                <div className="text-xs text-indigo-700">Total Carrefour</div>
-                <div className="font-bold text-slate-900">
-                  {monoprixSummary.totalCarrefour.toFixed(2)} €
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-indigo-700">Total Monoprix</div>
-                <div className="font-bold text-slate-900">
-                  {monoprixSummary.totalMonoprix.toFixed(2)} €
-                </div>
-              </div>
-              <div
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs ${
-                  monoprixSummary.diff > 0
-                    ? "bg-emerald-600 text-white"
-                    : monoprixSummary.diff < 0
-                    ? "bg-rose-600 text-white"
-                    : "bg-slate-600 text-white"
-                }`}
-              >
-                {monoprixSummary.diff > 0
-                  ? `Carrefour gagne de ${monoprixSummary.diff.toFixed(2)} €`
-                  : monoprixSummary.diff < 0
-                  ? `Monoprix gagne de ${Math.abs(monoprixSummary.diff).toFixed(2)} €`
-                  : "Égalité parfaite"}
-              </div>
-            </div>
-          </section>
-        )}
-
         {/* Main Tabs */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
             <button
               type="button"
-              onClick={() => setActiveTab("comparator")}
-              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 ${
-                activeTab === "comparator"
+              onClick={() => setActiveTab("duel")}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                activeTab === "duel"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Swords className="h-4 w-4" />
+              <span>
+                Duel Carrefour vs Monoprix ({comparisons.length})
+              </span>
+              {suggestions.length > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800">
+                  +{suggestions.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("catalog")}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                activeTab === "catalog"
                   ? "border-blue-600 text-blue-700"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <Search className="h-4 w-4" />
-              <span>Comparateur Produits (Mode Monoprix)</span>
+              <span>Catalogue & Recherche ({products.length})</span>
             </button>
+
             <button
               type="button"
               onClick={() => setActiveTab("receipts")}
-              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 ${
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
                 activeTab === "receipts"
                   ? "border-blue-600 text-blue-700"
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
               <ReceiptIcon className="h-4 w-4" />
-              <span>Mes Tickets de Caisse ({receiptsList.length})</span>
+              <span>Mes Tickets & Factures ({receiptsList.length})</span>
             </button>
           </div>
         </div>
 
-        {/* TAB 1: Product Comparator */}
-        {activeTab === "comparator" && (
+        {/* TAB 1: Duel Carrefour vs Monoprix */}
+        {activeTab === "duel" && (
+          <DuelComparisonTab
+            comparisons={comparisons}
+            suggestions={suggestions}
+            products={products}
+            compareBasis={compareBasis}
+            onChangeCompareBasis={setCompareBasis}
+            preselectedProduct={preselectedForDuel}
+            onClearPreselected={() => setPreselectedForDuel(null)}
+            onComparisonsChanged={() => {
+              void refreshComparisonsOnly();
+            }}
+          />
+        )}
+
+        {/* TAB 2: Unified Catalog */}
+        {activeTab === "catalog" && (
           <section className="space-y-4">
-            {/* Search & Filters */}
             <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
               <div className="flex flex-col md:flex-row gap-3">
                 <div className="relative flex-1">
@@ -560,7 +576,7 @@ export function DashboardClient({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Rechercher un produit pour comparer avec Monoprix (ex: patate douce, lait sans lactose, orange, douche, haribo...)"
+                    placeholder="Rechercher un produit Carrefour ou Monoprix (ex: sucrine, pain au lait, patate douce, comté, saumon...)"
                     className="w-full pl-11 pr-10 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm"
                   />
                   {searchQuery && (
@@ -586,7 +602,7 @@ export function DashboardClient({
                     <option value="name">Tri : Nom A-Z</option>
                     <option value="price_asc">Tri : Prix croissant</option>
                     <option value="most_bought">Tri : Plus achetés</option>
-                    <option value="savings">Tri : Gain vs Monoprix</option>
+                    <option value="savings">Tri : Gain manuel Monoprix</option>
                   </select>
 
                   <div className="inline-flex rounded-xl border border-slate-300 p-0.5 bg-slate-50 text-xs font-medium">
@@ -620,10 +636,37 @@ export function DashboardClient({
                 <div className="flex flex-wrap items-center gap-1.5 text-xs">
                   {(
                     [
-                      ["all", `Tous (${products.length})`],
+                      ["all", "Toutes enseignes"],
+                      ["carrefour", "Carrefour"],
+                      ["monoprix", "Monoprix"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setRetailerFilter(key)}
+                      className={`px-3 py-1.5 rounded-full font-semibold transition cursor-pointer ${
+                        retailerFilter === key
+                          ? key === "monoprix"
+                            ? "bg-rose-600 text-white"
+                            : key === "carrefour"
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-900 text-white"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+
+                  <span className="text-slate-300 px-1">|</span>
+
+                  {(
+                    [
+                      ["all", "Tous produits"],
                       ["weighted", "Avec prix au kg / L"],
-                      ["discounts", "Avec promo / fidélité"],
-                      ["monoprix", `Comparés Monoprix (${monoprixSummary.count})`],
+                      ["discounts", "Avec promo / M+ / Club"],
+                      ["monoprix", "Prix Monoprix saisi manuellement"],
                     ] as const
                   ).map(([key, label]) => (
                     <button
@@ -632,7 +675,7 @@ export function DashboardClient({
                       onClick={() => setProductFilter(key)}
                       className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer ${
                         productFilter === key
-                          ? "bg-blue-600 text-white"
+                          ? "bg-blue-100 text-blue-800 border border-blue-300"
                           : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                       }`}
                     >
@@ -642,49 +685,60 @@ export function DashboardClient({
                 </div>
 
                 <span className="text-xs text-slate-500">
-                  {filteredProducts.length} produit(s) affiché(s)
+                  {filteredProducts.length} produit(s)
                 </span>
               </div>
             </div>
 
-            {/* Product list */}
             {filteredProducts.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-500 text-sm">
-                Aucun produit ne correspond à votre recherche. Essayez un autre
-                mot-clé ou importez de nouveaux tickets.
+                Aucun produit ne correspond à votre recherche.
               </div>
             ) : (
               <div className="space-y-3">
                 {filteredProducts.map((p) => {
-                  const isExpanded = expandedProduct === p.rawLabel;
-                  const ref = getCarrefourRefPrice(p);
+                  const isExpanded = expandedProduct === p.key;
+                  const isMonoprix = p.retailer === "monoprix";
+                  const ref = getProductRefPrice(p);
                   const draftValue = monoprixDrafts[p.rawLabel] ?? "";
-                  const numericMonoprix =
+                  const numericManualMonoprix =
                     draftValue.trim() !== ""
                       ? Number(draftValue.replace(",", "."))
                       : p.monoprixPrice;
-                  const validMonoprix =
-                    numericMonoprix !== null &&
-                    Number.isFinite(numericMonoprix) &&
-                    numericMonoprix > 0
-                      ? numericMonoprix
+                  const validManualMonoprix =
+                    !isMonoprix &&
+                    numericManualMonoprix !== null &&
+                    Number.isFinite(numericManualMonoprix) &&
+                    numericManualMonoprix > 0
+                      ? numericManualMonoprix
                       : null;
 
-                  const diff =
-                    validMonoprix !== null ? validMonoprix - ref.price : null;
+                  const manualDiff =
+                    validManualMonoprix !== null
+                      ? validManualMonoprix - ref.price
+                      : null;
 
                   const hasSavingsVsShelf = p.lastNetUnitPrice < p.lastUnitPrice;
 
                   return (
                     <div
-                      key={p.rawLabel}
+                      key={p.key}
                       className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden transition hover:border-slate-300"
                     >
                       <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        {/* Left: Product Name & Metadata */}
                         <div className="space-y-1.5 min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            {editingNameFor === p.rawLabel ? (
+                            <span
+                              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                                isMonoprix
+                                  ? "bg-rose-100 text-rose-800 border-rose-200"
+                                  : "bg-blue-100 text-blue-800 border-blue-200"
+                              }`}
+                            >
+                              {isMonoprix ? "Monoprix" : "Carrefour"}
+                            </span>
+
+                            {editingNameFor === p.key ? (
                               <div className="flex items-center gap-1.5">
                                 <input
                                   type="text"
@@ -736,7 +790,7 @@ export function DashboardClient({
                                   type="button"
                                   title="Renommer pour faciliter la recherche"
                                   onClick={() => {
-                                    setEditingNameFor(p.rawLabel);
+                                    setEditingNameFor(p.key);
                                     setCustomNameDraft(p.customName ?? "");
                                   }}
                                   className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
@@ -769,7 +823,7 @@ export function DashboardClient({
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                             {p.customName && (
                               <span className="font-mono text-slate-400">
-                                Ticket : {p.rawLabel}
+                                Libellé : {p.rawLabel}
                               </span>
                             )}
                             <span className="inline-flex items-center gap-1">
@@ -790,7 +844,6 @@ export function DashboardClient({
                           </div>
                         </div>
 
-                        {/* Middle: Prices (Shelf, Net, €/kg or €/L, Min/Max) */}
                         <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                           <div>
                             <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">
@@ -811,7 +864,7 @@ export function DashboardClient({
                               {hasSavingsVsShelf && (
                                 <span
                                   className="text-xs text-slate-400 line-through"
-                                  title="Prix affiché avant remise/fidélité"
+                                  title="Prix affiché avant remise/abonnement"
                                 >
                                   {p.lastUnitPrice.toFixed(2)} €
                                 </span>
@@ -819,7 +872,9 @@ export function DashboardClient({
                             </div>
                             {hasSavingsVsShelf && (
                               <div className="text-[11px] text-emerald-700 font-medium">
-                                Net après remise/Club
+                                {isMonoprix
+                                  ? "Net après promo / -10% M+"
+                                  : "Net après remise / Club"}
                               </div>
                             )}
                           </div>
@@ -848,99 +903,86 @@ export function DashboardClient({
                                 )}
                             </div>
                           )}
-
-                          {p.purchaseCount > 1 && p.lastPricePerKgOrL === null && (
-                            <div>
-                              <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">
-                                Fourchette
-                              </div>
-                              <div className="text-xs font-medium text-slate-700 mt-0.5">
-                                Min {p.minUnitPrice.toFixed(2)} € · Moy{" "}
-                                {p.avgUnitPrice.toFixed(2)} € · Max{" "}
-                                {p.maxUnitPrice.toFixed(2)} €
-                              </div>
-                            </div>
-                          )}
                         </div>
 
-                        {/* Right: Monoprix Comparator + History toggle */}
                         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-                            <span className="text-xs font-semibold text-slate-600">
-                              Monoprix :
-                            </span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={draftValue}
-                              onChange={(e) =>
-                                setMonoprixDrafts((prev) => ({
-                                  ...prev,
-                                  [p.rawLabel]: e.target.value,
-                                }))
-                              }
-                              onBlur={() => {
-                                const cur =
-                                  p.monoprixPrice !== null
-                                    ? p.monoprixPrice.toFixed(2)
-                                    : "";
-                                if (draftValue !== cur) {
-                                  void saveProductNote(p.rawLabel, {
-                                    monoprixPrice: draftValue || null,
-                                  });
+                          {!isMonoprix && (
+                            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+                              <span className="text-xs font-semibold text-slate-600">
+                                Prix Monop :
+                              </span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={draftValue}
+                                onChange={(e) =>
+                                  setMonoprixDrafts((prev) => ({
+                                    ...prev,
+                                    [p.rawLabel]: e.target.value,
+                                  }))
                                 }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  void saveProductNote(p.rawLabel, {
-                                    monoprixPrice: draftValue || null,
-                                  });
-                                }
-                              }}
-                              placeholder="0.00"
-                              className="w-16 px-1.5 py-0.5 rounded-md border border-slate-300 bg-white text-xs font-semibold text-right outline-none focus:border-blue-500"
-                            />
-                            {p.lastPricePerKgOrL !== null ? (
-                              <button
-                                type="button"
-                                title="Basculer unité de comparaison (€ pièce vs €/kg ou €/L)"
-                                onClick={() => {
-                                  const nextUnit =
-                                    p.monoprixUnit === "per_kg_or_l"
-                                      ? "unit"
-                                      : "per_kg_or_l";
-                                  void saveProductNote(p.rawLabel, {
-                                    monoprixUnit: nextUnit,
-                                  });
+                                onBlur={() => {
+                                  const cur =
+                                    p.monoprixPrice !== null
+                                      ? p.monoprixPrice.toFixed(2)
+                                      : "";
+                                  if (draftValue !== cur) {
+                                    void saveProductNote(p.rawLabel, {
+                                      monoprixPrice: draftValue || null,
+                                    });
+                                  }
                                 }}
-                                className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer"
-                              >
-                                {p.monoprixUnit === "per_kg_or_l"
-                                  ? p.unitType === "L"
-                                    ? "€/L"
-                                    : "€/kg"
-                                  : "€"}
-                              </button>
-                            ) : (
-                              <span className="text-xs text-slate-500">€</span>
-                            )}
-                          </div>
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    void saveProductNote(p.rawLabel, {
+                                      monoprixPrice: draftValue || null,
+                                    });
+                                  }
+                                }}
+                                placeholder="0.00"
+                                className="w-16 px-1.5 py-0.5 rounded-md border border-slate-300 bg-white text-xs font-semibold text-right outline-none focus:border-blue-500"
+                              />
+                              {p.lastPricePerKgOrL !== null ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const nextUnit =
+                                      p.monoprixUnit === "per_kg_or_l"
+                                        ? "unit"
+                                        : "per_kg_or_l";
+                                    void saveProductNote(p.rawLabel, {
+                                      monoprixUnit: nextUnit,
+                                    });
+                                  }}
+                                  className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 cursor-pointer"
+                                >
+                                  {p.monoprixUnit === "per_kg_or_l"
+                                    ? p.unitType === "L"
+                                      ? "€/L"
+                                      : "€/kg"
+                                    : "€"}
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-500">€</span>
+                              )}
+                            </div>
+                          )}
 
-                          {diff !== null && (
+                          {manualDiff !== null && (
                             <span
                               className={`px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap ${
-                                diff > 0.005
+                                manualDiff > 0.005
                                   ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                  : diff < -0.005
+                                  : manualDiff < -0.005
                                   ? "bg-rose-100 text-rose-800 border border-rose-200"
                                   : "bg-slate-100 text-slate-700 border border-slate-200"
                               }`}
                             >
-                              {diff > 0.005
-                                ? `Carrefour -${diff.toFixed(2)} ${ref.unitLabel}`
-                                : diff < -0.005
-                                ? `Monoprix -${Math.abs(diff).toFixed(2)} ${ref.unitLabel}`
+                              {manualDiff > 0.005
+                                ? `Carrefour -${manualDiff.toFixed(2)} ${ref.unitLabel}`
+                                : manualDiff < -0.005
+                                ? `Monoprix -${Math.abs(manualDiff).toFixed(2)} ${ref.unitLabel}`
                                 : "Prix égal"}
                             </span>
                           )}
@@ -953,8 +995,20 @@ export function DashboardClient({
 
                           <button
                             type="button"
+                            onClick={() => {
+                              setPreselectedForDuel(p);
+                              setActiveTab("duel");
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-xs font-semibold text-indigo-700 cursor-pointer"
+                          >
+                            <Swords className="h-3.5 w-3.5" />
+                            <span>Duel</span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() =>
-                              setExpandedProduct(isExpanded ? null : p.rawLabel)
+                              setExpandedProduct(isExpanded ? null : p.key)
                             }
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs font-medium text-slate-700 cursor-pointer"
                           >
@@ -968,7 +1022,6 @@ export function DashboardClient({
                         </div>
                       </div>
 
-                      {/* Expandable History Table */}
                       {isExpanded && (
                         <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 overflow-x-auto">
                           <table className="w-full text-xs">
@@ -976,14 +1029,14 @@ export function DashboardClient({
                               <tr>
                                 <th className="text-left py-1.5 pr-3">Date</th>
                                 <th className="text-left py-1.5 pr-3">
-                                  Magasin
+                                  Magasin / Enseigne
                                 </th>
                                 <th className="text-right py-1.5 px-3">Qté</th>
                                 <th className="text-right py-1.5 px-3">
                                   P.U. affiché
                                 </th>
                                 <th className="text-right py-1.5 px-3">
-                                  Remises / Club
+                                  {isMonoprix ? "Promos / M+" : "Remises / Club"}
                                 </th>
                                 <th className="text-right py-1.5 px-3">
                                   Net unitaire
@@ -1004,7 +1057,7 @@ export function DashboardClient({
                                         h.purchaseDate
                                       ).toLocaleDateString("fr-FR")}{" "}
                                       <span className="text-slate-400 font-normal">
-                                        (ticket {h.ticketKey})
+                                        (#{h.ticketKey})
                                       </span>
                                     </td>
                                     <td className="py-2 pr-3 text-slate-600">
@@ -1051,15 +1104,16 @@ export function DashboardClient({
           </section>
         )}
 
-        {/* TAB 2: Receipts List */}
+        {/* TAB 3: Receipts & Invoices */}
         {activeTab === "receipts" && (
           <section className="space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {(
                 [
-                  ["all", `Tous les magasins (${receiptsList.length})`],
+                  ["all", `Tous (${receiptsList.length})`],
                   ["market", "Carrefour Market"],
                   ["city", "Carrefour City"],
+                  ["monoprix", `Monoprix.fr Courses (${stats.monoprixCount})`],
                 ] as const
               ).map(([key, label]) => (
                 <button
@@ -1068,7 +1122,9 @@ export function DashboardClient({
                   onClick={() => setStoreFilter(key)}
                   className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer ${
                     storeFilter === key
-                      ? "bg-blue-600 text-white"
+                      ? key === "monoprix"
+                        ? "bg-rose-600 text-white"
+                        : "bg-blue-600 text-white"
                       : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
                   }`}
                 >
@@ -1079,14 +1135,14 @@ export function DashboardClient({
 
             {filteredReceipts.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-500 text-sm">
-                Aucun ticket trouvé. Cliquez sur{" "}
-                <strong>Rapatrier les nouveaux tickets</strong> pour importer
-                vos achats.
+                Aucun document trouvé. Cliquez sur{" "}
+                <strong>Importer des PDF</strong> pour ajouter vos tickets
+                Carrefour ou factures Monoprix.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredReceipts.map((r) => {
-                  const badge = formatStoreBadge(r.storeName);
+                  const badge = formatStoreBadge(r.storeName, r.retailer);
                   return (
                     <button
                       key={r.id}
@@ -1125,9 +1181,15 @@ export function DashboardClient({
                       <div className="pt-3 border-t border-slate-100 flex items-end justify-between">
                         <div className="space-y-0.5 text-xs">
                           {r.totalImmediateDiscount > 0 && (
-                            <div className="text-rose-700 font-medium">
-                              Remise immédiate : -
-                              {r.totalImmediateDiscount.toFixed(2)} €
+                            <div className="text-rose-700 font-medium flex items-center gap-1">
+                              <Tag className="h-3 w-3" />
+                              Promos : -{r.totalImmediateDiscount.toFixed(2)} €
+                            </div>
+                          )}
+                          {r.globalDiscount > 0 && (
+                            <div className="text-emerald-700 font-medium flex items-center gap-1">
+                              <Percent className="h-3 w-3" />
+                              Remise M+ : -{r.globalDiscount.toFixed(2)} €
                             </div>
                           )}
                           {r.loyaltyCredited > 0 && (
@@ -1137,9 +1199,10 @@ export function DashboardClient({
                             </div>
                           )}
                           {r.totalImmediateDiscount === 0 &&
+                            r.globalDiscount === 0 &&
                             r.loyaltyCredited === 0 && (
                               <span className="text-slate-400">
-                                Voir le détail du ticket →
+                                Voir le détail →
                               </span>
                             )}
                         </div>
@@ -1164,8 +1227,6 @@ export function DashboardClient({
         onSyncSuccess={() => {
           void refreshAllData();
         }}
-        syncToken={syncToken}
-        hasSavedSession={hasSavedSession}
         lastSyncAt={stats.lastSyncAt}
       />
 

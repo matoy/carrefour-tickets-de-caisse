@@ -1,15 +1,14 @@
 import { redirect } from "next/navigation";
-import {
-  createBookmarkletToken,
-  isAuthEnabled,
-  isRequestAuthenticated,
-} from "@/lib/auth";
+import { isAuthEnabled, isRequestAuthenticated } from "@/lib/auth";
 import { isUsingRemotePostgres } from "@/lib/db";
 import {
-  getSyncSetting,
   listAggregatedProducts,
   listReceipts,
 } from "@/lib/db/receipt-service";
+import {
+  computeSuggestedMatches,
+  listComparisonsWithPrices,
+} from "@/lib/db/comparison-service";
 import { DashboardClient } from "@/components/DashboardClient";
 
 export const dynamic = "force-dynamic";
@@ -20,19 +19,20 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const [{ receipts, stats }, products, savedSession] = await Promise.all([
+  const [{ receipts, stats }, products] = await Promise.all([
     listReceipts(true),
     listAggregatedProducts(),
-    getSyncSetting("carrefour_session_cookie"),
   ]);
+  const comparisons = await listComparisonsWithPrices(products);
+  const suggestions = computeSuggestedMatches(products, comparisons);
 
   return (
     <DashboardClient
       initialReceipts={receipts}
       initialStats={stats}
       initialProducts={products}
-      syncToken={createBookmarkletToken()}
-      hasSavedSession={Boolean(savedSession)}
+      initialComparisons={comparisons}
+      initialSuggestions={suggestions}
       authEnabled={isAuthEnabled()}
       isRemotePostgres={isUsingRemotePostgres()}
     />

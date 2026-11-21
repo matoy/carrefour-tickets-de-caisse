@@ -1,117 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  isApiRequestAuthenticated,
-  verifyBookmarkletToken,
-} from "@/lib/auth";
-import { parseCarrefourReceiptPdf } from "@/lib/parser/carrefour-pdf";
+import { isApiRequestAuthenticated } from "@/lib/auth";
+import { parseReceiptPdf } from "@/lib/parser";
 import {
   insertParsedReceiptIfNew,
   setSyncSetting,
   type UpsertResult,
 } from "@/lib/db/receipt-service";
 
-function getCorsHeaders(request: NextRequest): HeadersInit {
-  const origin = request.headers.get("origin") ?? "";
-  const allowedOrigin =
-    origin === "https://www.carrefour.fr" || origin === "https://carrefour.fr"
-      ? origin
-      : "https://www.carrefour.fr";
-  return {
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-sync-token",
-  };
-}
-
-export async function OPTIONS(request: NextRequest) {
-  return new NextResponse(null, {
-    status: 204,
-    headers: getCorsHeaders(request),
-  });
-}
-
 export async function POST(request: NextRequest) {
-  const cors = getCorsHeaders(request);
+  if (!isApiRequestAuthenticated(request)) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
 
   try {
-    const contentType = request.headers.get("content-type") ?? "";
-    const fileBuffers: Array<{
-      name: string;
-      buffer: Buffer;
-      source: "carrefour_sync" | "pdf_upload";
-    }> = [];
+    const formData = await request.formData();
+    const allEntries = [
+      ...formData.getAll("files"),
+      ...formData.getAll("file"),
+    ];
 
-    if (
-      contentType.includes("application/json") ||
-      contentType.includes("text/plain")
-    ) {
-      const rawBody = await request.text();
-      let body: {
-        syncToken?: string;
-        source?: "carrefour_sync" | "pdf_upload";
-        files?: Array<{ fileName: string; base64: string }>;
-      };
-      try {
-        body = (rawBody ? JSON.parse(rawBody) : {}) as typeof body;
-      } catch {
-        return NextResponse.json(
-          { error: "Corps JSON invalide" },
-          { status: 400, headers: cors }
-        );
-      }
-
-      if (
-        !isApiRequestAuthenticated(request) &&
-        !verifyBookmarkletToken(body.syncToken)
-      ) {
-        return NextResponse.json(
-          { error: "Non autorisé" },
-          { status: 401, headers: cors }
-        );
-      }
-
-      const source =
-        body.source === "carrefour_sync" ? "carrefour_sync" : "pdf_upload";
-      for (const f of body.files ?? []) {
-        if (!f.base64) continue;
-        const cleanBase64 = f.base64.includes(",")
-          ? f.base64.split(",")[1]
-          : f.base64;
+    const fileBuffers: Array<{ name: string; buffer: Buffer }> = [];
+    for (const entry of allEntries) {
+      if (entry instanceof File) {
+        const arrayBuffer = await entry.arrayBuffer();
         fileBuffers.push({
-          name: f.fileName || "ticket.pdf",
-          buffer: Buffer.from(cleanBase64, "base64"),
-          source,
+          name: entry.name || "ticket.pdf",
+          buffer: Buffer.from(arrayBuffer),
         });
-      }
-    } else {
-      if (!isApiRequestAuthenticated(request)) {
-        return NextResponse.json(
-          { error: "Non autorisé" },
-          { status: 401, headers: cors }
-        );
-      }
-
-      const formData = await request.formData();
-      const allEntries = [
-        ...formData.getAll("files"),
-        ...formData.getAll("file"),
-      ];
-      for (const entry of allEntries) {
-        if (entry instanceof File) {
-          const arrayBuffer = await entry.arrayBuffer();
-          fileBuffers.push({
-            name: entry.name || "ticket.pdf",
-            buffer: Buffer.from(arrayBuffer),
-            source: "pdf_upload",
-          });
-        }
       }
     }
 
     if (fileBuffers.length === 0) {
       return NextResponse.json(
         { error: "Aucun fichier PDF fourni" },
-        { status: 400, headers: cors }
+        { status: 400 }
       );
     }
 
@@ -120,8 +42,8 @@ export async function POST(request: NextRequest) {
 
     for (const item of fileBuffers) {
       try {
-        const parsed = await parseCarrefourReceiptPdf(item.buffer, item.name);
-        const res = await insertParsedReceiptIfNew(parsed, item.source);
+        const parsed = await parseReceiptPdf(item.buffer, item.name);
+        const res = await insertParsedReceiptIfNew(parsed, "pdf_upload");
         results.push(res);
       } catch (err) {
         errors.push(
@@ -137,16 +59,13 @@ export async function POST(request: NextRequest) {
       await setSyncSetting("last_sync_at", new Date().toISOString());
     }
 
-    return NextResponse.json(
-      {
-        ok: errors.length === 0 || insertedCount > 0,
-        insertedCount,
-        skippedCount,
-        results,
-        errors,
-      },
-      { headers: cors }
-    );
+    return NextResponse.json({
+      ok: errors.length === 0 || insertedCount > 0,
+      insertedCount,
+      skippedCount,
+      results,
+      errors,
+    });
   } catch (err) {
     console.error("POST /api/receipts/upload error:", err);
     return NextResponse.json(
@@ -154,7 +73,7 @@ export async function POST(request: NextRequest) {
         error:
           err instanceof Error ? err.message : "Erreur lors de l'import PDF",
       },
-      { status: 500, headers: cors }
+      { status: 500 }
     );
   }
 }

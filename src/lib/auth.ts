@@ -23,33 +23,18 @@ function signPayload(payload: string): string {
   return `${payload}.${sig}`;
 }
 
-function verifySignedPayload(
-  token: string | undefined | null,
-  expectedPayload: string
-): boolean {
-  if (!isAuthEnabled()) return true;
-  if (!token) return false;
-  const expected = signPayload(expectedPayload);
-  const a = Buffer.from(token);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export function createAuthToken(): string {
   return signPayload("authenticated");
 }
 
-export function createBookmarkletToken(): string {
-  return signPayload("bookmarklet-sync");
-}
-
 export function verifyAuthToken(token: string | undefined | null): boolean {
-  return verifySignedPayload(token, "authenticated");
-}
-
-export function verifyBookmarkletToken(token: string | undefined | null): boolean {
-  return verifySignedPayload(token, "bookmarklet-sync");
+  if (!isAuthEnabled()) return true;
+  if (!token) return false;
+  const expected = createAuthToken();
+  const a = Buffer.from(token);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 export function verifyPassword(candidate: string): boolean {
@@ -71,8 +56,5 @@ export async function isRequestAuthenticated(): Promise<boolean> {
 export function isApiRequestAuthenticated(request: NextRequest): boolean {
   if (!isAuthEnabled()) return true;
   const cookieToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  if (verifyAuthToken(cookieToken)) return true;
-  const syncToken = request.headers.get("x-sync-token");
-  if (verifyBookmarkletToken(syncToken)) return true;
-  return false;
+  return verifyAuthToken(cookieToken);
 }

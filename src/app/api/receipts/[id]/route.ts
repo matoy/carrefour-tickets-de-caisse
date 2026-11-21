@@ -40,6 +40,7 @@ export async function GET(
   return NextResponse.json({
     receipt: {
       id: r.id,
+      retailer: r.retailer === "monoprix" ? "monoprix" : "carrefour",
       externalId: r.externalId,
       ticketKey: r.ticketKey,
       storeName: r.storeName,
@@ -47,6 +48,8 @@ export async function GET(
       purchaseDate: r.purchaseDate.toISOString(),
       totalBeforeDiscount: Number(r.totalBeforeDiscount),
       totalImmediateDiscount: Number(r.totalImmediateDiscount),
+      globalDiscount: Number(r.globalDiscount),
+      extraFees: Number(r.extraFees),
       totalPaid: Number(r.totalPaid),
       loyaltyCredited: Number(r.loyaltyCredited),
       paymentMethod: r.paymentMethod,

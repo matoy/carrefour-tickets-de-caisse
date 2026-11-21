@@ -1,11 +1,12 @@
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import {
   buildNormalizedLabel,
   extractPackageMetrics,
   maskLoyaltyCards,
 } from "./normalize";
+import { extractPdfDocument, type ExtractedPdfDocument } from "./pdf-text";
+
+export type Retailer = "carrefour" | "monoprix";
 
 export interface ParsedReceiptItem {
   lineIndex: number;
@@ -27,6 +28,7 @@ export interface ParsedReceiptItem {
 }
 
 export interface ParsedReceipt {
+  retailer: Retailer;
   externalId: string;
   ticketKey: string;
   storeName: string;
@@ -34,6 +36,8 @@ export interface ParsedReceipt {
   purchaseDate: Date;
   totalBeforeDiscount: number;
   totalImmediateDiscount: number;
+  globalDiscount: number;
+  extraFees: number;
   totalPaid: number;
   loyaltyCredited: number;
   paymentMethod: string | null;
@@ -41,12 +45,6 @@ export interface ParsedReceipt {
   fileName: string | null;
   rawText: string;
   items: ParsedReceiptItem[];
-}
-
-interface TextItemPos {
-  str: string;
-  x: number;
-  y: number;
 }
 
 function round2(n: number): number {
@@ -62,95 +60,13 @@ function parseNumber(value: string): number {
 }
 
 /**
- * Extract visual lines from a PDF buffer using pdfjs-dist with (x, y) grouping.
+ * Parse a Carrefour digital receipt from an already-extracted PDF document.
  */
-async function extractLinesFromPdf(buffer: Buffer): Promise<string[]> {
-  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const workerPath = path.join(
-    process.cwd(),
-    "node_modules",
-    "pdfjs-dist",
-    "legacy",
-    "build",
-    "pdf.worker.mjs"
-  );
-  if (pdfjsLib.GlobalWorkerOptions) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
-  }
-
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(buffer),
-    useWorkerFetch: false,
-    disableFontFace: true,
-    verbosity: 0,
-  });
-
-  const pdf = await loadingTask.promise;
-  const allLines: string[] = [];
-
-  try {
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      const rawItems: TextItemPos[] = [];
-
-      for (const item of textContent.items) {
-        if (!("str" in item) || !item.str.trim()) continue;
-        const transform = item.transform;
-        rawItems.push({
-          str: item.str.trim(),
-          x: transform[4],
-          y: transform[5],
-        });
-      }
-
-      // Sort top-to-bottom (y descending), then left-to-right (x ascending)
-      rawItems.sort((a, b) => {
-        if (Math.abs(a.y - b.y) > 2.8) return b.y - a.y;
-        return a.x - b.x;
-      });
-
-      const lineGroups: Array<{ y: number; items: TextItemPos[] }> = [];
-      for (const item of rawItems) {
-        const existing = lineGroups.find((g) => Math.abs(g.y - item.y) <= 2.8);
-        if (existing) {
-          existing.items.push(item);
-        } else {
-          lineGroups.push({ y: item.y, items: [item] });
-        }
-      }
-
-      for (const group of lineGroups) {
-        group.items.sort((a, b) => a.x - b.x);
-        const lineText = group.items
-          .map((i) => i.str)
-          .join(" ")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (lineText) {
-          allLines.push(lineText);
-        }
-      }
-    }
-  } finally {
-    if (typeof pdf.cleanup === "function") {
-      await pdf.cleanup();
-    }
-    await loadingTask.destroy();
-  }
-
-  return allLines;
-}
-
-/**
- * Parse a Carrefour digital receipt PDF buffer into structured receipt + item records.
- */
-export async function parseCarrefourReceiptPdf(
-  buffer: Buffer,
+export function parseCarrefourFromDocument(
+  doc: ExtractedPdfDocument,
   fileName?: string
-): Promise<ParsedReceipt> {
-  const rawLines = await extractLinesFromPdf(buffer);
-  const maskedLines = rawLines.map((line) => maskLoyaltyCards(line));
+): ParsedReceipt {
+  const maskedLines = doc.allLines.map((line) => maskLoyaltyCards(line));
   const rawText = maskedLines.join("\n");
 
   // 1. Store Name (line immediately preceding "Tél:")
@@ -265,7 +181,6 @@ export async function parseCarrefourReceiptPdf(
   for (let i = itemsStartIdx; i < maskedLines.length; i++) {
     const line = maskedLines[i];
 
-    // Totals markers end the items section
     const totalBeforeMatch = line.match(
       /^Total avant remises\s+(-?\d+(?:[.,]\d+)?)\s*€?/i
     );
@@ -372,7 +287,6 @@ export async function parseCarrefourReceiptPdf(
         lastItem.pricePerKgOrL = round2(pricePerKg);
         lastItem.unitType = "kg";
       } else {
-        // Fallback match against any item without weight whose total matches weight * pricePerKg
         const candidate = items.find(
           (it) =>
             it.weightKg === null &&
@@ -458,7 +372,7 @@ export async function parseCarrefourReceiptPdf(
       } else {
         const share =
           totalMatchPrice > 0
-            ? Math.floor((loy.amount * (it.totalPrice / totalMatchPrice)) * 100) /
+            ? Math.floor(loy.amount * (it.totalPrice / totalMatchPrice) * 100) /
               100
             : Math.floor((loy.amount / matching.length) * 100) / 100;
         it.loyaltyDiscount = round2(it.loyaltyDiscount + share);
@@ -524,6 +438,7 @@ export async function parseCarrefourReceiptPdf(
   }
 
   return {
+    retailer: "carrefour",
     externalId,
     ticketKey,
     storeName,
@@ -531,6 +446,8 @@ export async function parseCarrefourReceiptPdf(
     purchaseDate,
     totalBeforeDiscount: finalTotalBeforeDiscount,
     totalImmediateDiscount: round2(totalImmediateDiscount),
+    globalDiscount: 0,
+    extraFees: 0,
     totalPaid: finalTotalPaid,
     loyaltyCredited: round2(loyaltyCredited),
     paymentMethod: paymentMethods.length > 0 ? paymentMethods.join(" · ") : null,
@@ -539,4 +456,15 @@ export async function parseCarrefourReceiptPdf(
     rawText,
     items,
   };
+}
+
+/**
+ * Parse a Carrefour digital receipt PDF buffer into structured receipt + item records.
+ */
+export async function parseCarrefourReceiptPdf(
+  buffer: Buffer,
+  fileName?: string
+): Promise<ParsedReceipt> {
+  const doc = await extractPdfDocument(buffer);
+  return parseCarrefourFromDocument(doc, fileName);
 }

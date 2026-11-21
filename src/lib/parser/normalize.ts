@@ -32,6 +32,51 @@ const ABBREVIATION_EXPANSIONS: Array<[RegExp, string]> = [
   [/\bBROCOLIS\b/gi, "BROCOLI"],
 ];
 
+const STOPWORDS_FOR_MATCHING = new Set([
+  "de",
+  "du",
+  "des",
+  "la",
+  "le",
+  "les",
+  "l",
+  "d",
+  "au",
+  "aux",
+  "en",
+  "et",
+  "a",
+  "pour",
+  "avec",
+  "sans",
+  "monoprix",
+  "carrefour",
+  "crf",
+  "bio",
+  "fqc",
+  "filiere",
+  "qualite",
+  "france",
+  "vrac",
+  "piece",
+  "pce",
+  "barquette",
+  "bq",
+  "filet",
+  "flt",
+  "paquet",
+  "format",
+  "familial",
+  "pots",
+  "pot",
+  "x",
+  "kg",
+  "g",
+  "l",
+  "ml",
+  "cl",
+]);
+
 /**
  * Remove accents and normalize whitespace/casing for search and matching.
  */
@@ -57,6 +102,32 @@ export function buildNormalizedLabel(rawLabel: string): string {
       ? expanded
       : `${rawLabel} ${expanded}`;
   return stripAccents(combined);
+}
+
+/**
+ * Extract meaningful normalized keywords from a product label for cross-retailer pairing.
+ */
+export function extractMatchTokens(
+  rawLabel: string,
+  normalizedLabel: string
+): string[] {
+  const base = stripAccents(`${rawLabel} ${normalizedLabel}`)
+    .replace(/['’.,/()*+-]/g, " ")
+    .replace(/\b\d+(?:[.,]\d+)?\s*(?:kg|g|l|ml|cl|mn|mois)\b/gi, " ")
+    .replace(/\bx\d+\b/gi, " ")
+    .replace(/\b\d+x\b/gi, " ")
+    .replace(/\b\d+\b/g, " ");
+
+  const tokens = new Set<string>();
+  for (const rawTok of base.split(/\s+/)) {
+    const tok = rawTok.trim();
+    if (tok.length < 3) continue;
+    if (STOPWORDS_FOR_MATCHING.has(tok)) continue;
+    const singular = tok.endsWith("s") && tok.length > 4 ? tok.slice(0, -1) : tok;
+    if (STOPWORDS_FOR_MATCHING.has(singular)) continue;
+    tokens.add(singular);
+  }
+  return Array.from(tokens);
 }
 
 export interface PackageMetrics {
@@ -87,7 +158,7 @@ function toKgOrL(
 }
 
 /**
- * Extract weight (kg) or volume (L) embedded in a Carrefour product label,
+ * Extract weight (kg) or volume (L) embedded in a product label,
  * multiplied by the purchased quantity.
  */
 export function extractPackageMetrics(
@@ -95,7 +166,7 @@ export function extractPackageMetrics(
   quantity: number
 ): PackageMetrics {
   const multiMatch = rawLabel.match(
-    /(\d+)\s*[xX*]\s*(\d+(?:[.,]\d+)?)\s*(KG|G|L|ML|CL)\b/i
+    /(?<![xX])\b(\d+)\s*[xX*]\s*(\d+(?:[.,]\d+)?)\s*(KG|G|L|ML|CL)\b/i
   );
   if (multiMatch) {
     const count = Number(multiMatch[1]);
@@ -128,4 +199,28 @@ export function maskLoyaltyCards(text: string): string {
     const tail = match.slice(-4);
     return `913572*********${tail}`;
   });
+}
+
+/**
+ * Mask personal info (loyalty cards, customer name, email, delivery address) before storing rawText.
+ */
+export function maskPersonalInfo(text: string): string {
+  let masked = maskLoyaltyCards(text);
+  masked = masked.replace(
+    /([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/g,
+    "***@$2"
+  );
+  masked = masked.replace(
+    /^(Nom\s+du\s+client\s*:\s*).+$/gim,
+    "$1[MASQUE]"
+  );
+  masked = masked.replace(
+    /^(Votre\s+e-?mail\s*:\s*).+$/gim,
+    "$1[MASQUE]"
+  );
+  masked = masked.replace(
+    /^(\d{1,4}\s+(?:Rue|Avenue|Boulevard|All[ée]e|Impasse|Place|Chemin)\b.+)$/gim,
+    "[ADRESSE MASQUEE]"
+  );
+  return masked;
 }
