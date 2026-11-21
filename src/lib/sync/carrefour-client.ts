@@ -147,6 +147,158 @@ function isBotChallenge(status: number, body: string): boolean {
   return /datadome|cf-chl-|challenge-platform/i.test(body);
 }
 
+export interface ExtractedHarData {
+  isValidHar: boolean;
+  totalEntryCount: number;
+  carrefourEntryCount: number;
+  cookieHeader: string;
+  userAgent: string | null;
+  embeddedPdfs: CarrefourFetchResult["downloadedPdfs"];
+}
+
+/**
+ * Extract Carrefour session cookies, user-agent, and any embedded PDF responses from a HAR file.
+ */
+export function extractDataFromHar(harText: string): ExtractedHarData {
+  const empty: ExtractedHarData = {
+    isValidHar: false,
+    totalEntryCount: 0,
+    carrefourEntryCount: 0,
+    cookieHeader: "",
+    userAgent: null,
+    embeddedPdfs: [],
+  };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(harText);
+  } catch {
+    return empty;
+  }
+
+  const entries = (
+    parsed as { log?: { entries?: Array<Record<string, unknown>> } }
+  )?.log?.entries;
+  if (!Array.isArray(entries)) {
+    return empty;
+  }
+
+  let cookieHeader = "";
+  let userAgent: string | null = null;
+  let carrefourEntryCount = 0;
+  const embeddedPdfs: CarrefourFetchResult["downloadedPdfs"] = [];
+  const seenPdfNames = new Set<string>();
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i] as {
+      request?: {
+        url?: string;
+        headers?: Array<{ name?: string; value?: string }>;
+        cookies?: Array<{ name?: string; value?: string }>;
+      };
+      response?: {
+        headers?: Array<{ name?: string; value?: string }>;
+        content?: {
+          mimeType?: string;
+          encoding?: string;
+          text?: string;
+        };
+      };
+    };
+
+    const url = String(entry?.request?.url ?? "");
+    let isCarrefour = false;
+    try {
+      isCarrefour = /(?:^|\.)carrefour\.fr$/i.test(new URL(url).hostname);
+    } catch {
+      isCarrefour = false;
+    }
+
+    if (isCarrefour) {
+      carrefourEntryCount++;
+
+      for (const h of entry?.request?.headers ?? []) {
+        const name = String(h?.name ?? "").toLowerCase();
+        const value = String(h?.value ?? "");
+        if (name === "cookie" && value.length > cookieHeader.length) {
+          cookieHeader = value;
+        }
+        if (name === "user-agent" && !userAgent && value) {
+          userAgent = value;
+        }
+      }
+
+      if (Array.isArray(entry?.request?.cookies) && entry.request.cookies.length > 0) {
+        const joined = entry.request.cookies
+          .filter((c) => c?.name && c.value !== undefined)
+          .map((c) => `${c.name}=${c.value}`)
+          .join("; ");
+        if (joined.length > cookieHeader.length) {
+          cookieHeader = joined;
+        }
+      }
+    }
+
+    const content = entry?.response?.content;
+    const text = content?.text;
+    if (typeof text === "string" && text.length > 100) {
+      const mimeType = String(content?.mimeType ?? "").toLowerCase();
+      const encoding = String(content?.encoding ?? "").toLowerCase();
+      const looksLikePdf =
+        mimeType.includes("pdf") ||
+        text.startsWith("JVBERi0") ||
+        text.startsWith("%PDF-");
+
+      if (looksLikePdf) {
+        const buf =
+          encoding === "base64" || text.startsWith("JVBERi0")
+            ? Buffer.from(text, "base64")
+            : Buffer.from(text, "latin1");
+        if (buf.subarray(0, 5).toString("ascii") === "%PDF-") {
+          const urlMatch = url.match(
+            /\/en-magasin\/\d+\/(\d{8})\/(\d+)\/(\d+-\d+-\d+)/
+          );
+          let fileName = urlMatch
+            ? `${urlMatch[3]}_ticket.pdf`
+            : `har_ticket_${i + 1}.pdf`;
+          for (const rh of entry?.response?.headers ?? []) {
+            if (String(rh?.name ?? "").toLowerCase() === "content-disposition") {
+              const fnMatch = String(rh?.value ?? "").match(
+                /filename[^;=\n]*=\s*["']?([^"';\n]+)["']?/i
+              );
+              if (fnMatch?.[1]) {
+                fileName = fnMatch[1].trim();
+              }
+            }
+          }
+          if (!seenPdfNames.has(fileName)) {
+            seenPdfNames.add(fileName);
+            const ticketKey = urlMatch?.[3] ?? fileName.replace(/_ticket\.pdf$/i, "");
+            const externalId = urlMatch
+              ? `${urlMatch[1]}-${urlMatch[2]}-${urlMatch[3]}`
+              : fileName;
+            embeddedPdfs.push({
+              externalId,
+              ticketKey,
+              fileName,
+              buffer: buf,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    isValidHar: true,
+    totalEntryCount: entries.length,
+    carrefourEntryCount,
+    cookieHeader,
+    userAgent,
+    embeddedPdfs,
+  };
+}
+
 /**
  * Attempt to fetch Carrefour in-store receipts list and download PDFs for new tickets.
  */
@@ -155,9 +307,18 @@ export async function syncFromCarrefourSession(params: {
   existingExternalIds: Set<string>;
   extraHarText?: string;
 }): Promise<CarrefourFetchResult> {
-  const { cookieHeader, extraHeaders } = extractHeadersFromInput(
+  const { cookieHeader: inputCookie, extraHeaders } = extractHeadersFromInput(
     params.cookieOrCurl
   );
+
+  const harData = params.extraHarText?.trim()
+    ? extractDataFromHar(params.extraHarText)
+    : null;
+
+  const cookieHeader = inputCookie || harData?.cookieHeader || "";
+  if (!extraHeaders["user-agent"] && harData?.userAgent) {
+    extraHeaders["user-agent"] = harData.userAgent;
+  }
 
   const discovered = new Map<string, DiscoveredCarrefourTicket>();
   if (params.extraHarText) {
@@ -169,14 +330,36 @@ export async function syncFromCarrefourSession(params: {
     discovered.set(t.externalId, t);
   }
 
+  const embeddedPdfs = (harData?.embeddedPdfs ?? []).filter(
+    (pdf) => !params.existingExternalIds.has(pdf.externalId)
+  );
+
   if (!cookieHeader) {
+    if (embeddedPdfs.length > 0) {
+      return {
+        ok: true,
+        blockedByBotProtection: false,
+        needsAuth: false,
+        statusCode: 200,
+        message: `${embeddedPdfs.length} PDF extrait(s) directement depuis le fichier .har.`,
+        discoveredTickets: Array.from(discovered.values()),
+        downloadedPdfs: embeddedPdfs,
+        errors: [],
+      };
+    }
+
+    const harDiagnostic = harData
+      ? harData.isValidHar
+        ? `Le fichier .har contient ${harData.totalEntryCount} requête(s) (dont ${harData.carrefourEntryCount} vers carrefour.fr), mais aucun cookie de session ni PDF intégré. Par défaut, Chrome retire les cookies des exports .har (ou la page n'a pas été rechargée avec F5 pendant la capture). Utilisez plutôt « Copy as cURL » sur une requête carrefour.fr ou le Bookmarklet 1-clic.`
+        : "Le fichier .har fourni n'est pas un JSON HAR valide."
+      : "Aucun cookie de session Carrefour fourni. Utilisez le Bookmarklet 1-clic depuis carrefour.fr ou collez un Copy as cURL / Cookie.";
+
     return {
       ok: false,
       blockedByBotProtection: false,
       needsAuth: true,
       statusCode: 400,
-      message:
-        "Aucun cookie de session Carrefour fourni. Utilisez le Bookmarklet 1-clic depuis carrefour.fr ou collez un Copy as cURL / Cookie.",
+      message: harDiagnostic,
       discoveredTickets: Array.from(discovered.values()),
       downloadedPdfs: [],
       errors: [],
@@ -265,11 +448,15 @@ export async function syncFromCarrefourSession(params: {
   }
 
   const allDiscovered = Array.from(discovered.values());
+  const downloadedPdfs: CarrefourFetchResult["downloadedPdfs"] = [
+    ...embeddedPdfs,
+  ];
+  const alreadyExtractedIds = new Set(embeddedPdfs.map((p) => p.externalId));
   const missingTickets = allDiscovered.filter(
-    (t) => !params.existingExternalIds.has(t.externalId)
+    (t) =>
+      !params.existingExternalIds.has(t.externalId) &&
+      !alreadyExtractedIds.has(t.externalId)
   );
-
-  const downloadedPdfs: CarrefourFetchResult["downloadedPdfs"] = [];
 
   for (const ticket of missingTickets) {
     const candidatePdfUrls = [

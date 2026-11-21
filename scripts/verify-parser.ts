@@ -10,6 +10,10 @@ import {
 } from "../src/lib/db/receipt-service";
 import { closeDb, ensureDbInitialized } from "../src/lib/db";
 import { createBookmarkletToken } from "../src/lib/auth";
+import {
+  extractDataFromHar,
+  syncFromCarrefourSession,
+} from "../src/lib/sync/carrefour-client";
 import { GET as getReceiptsRoute } from "../src/app/api/receipts/route";
 import { GET as getProductsRoute } from "../src/app/api/products/route";
 import { POST as postProductNoteRoute } from "../src/app/api/products/note/route";
@@ -206,6 +210,86 @@ async function main() {
   const syncGetJson = (await syncGetRes.json()) as { syncToken: string };
   assert.ok(syncGetJson.syncToken.startsWith("bookmarklet-sync."));
   console.log("  OK All 5 API route handlers returned HTTP 200 with expected JSON!");
+
+  console.log("4. Testing HAR extraction (cookies, embedded PDFs, and cookie-less diagnostic)...");
+  const cookieLessHar = JSON.stringify({
+    log: {
+      entries: [
+        {
+          request: {
+            url: "https://dcinfos-cache.abtasty.com/test",
+            headers: [],
+            cookies: [],
+          },
+          response: { content: { mimeType: "application/json", text: "[]" } },
+        },
+      ],
+    },
+  });
+  const harDiagRes = await syncFromCarrefourSession({
+    cookieOrCurl: "",
+    existingExternalIds: new Set(),
+    extraHarText: cookieLessHar,
+  });
+  assert.equal(harDiagRes.ok, false);
+  assert.equal(harDiagRes.needsAuth, true);
+  assert.ok(
+    harDiagRes.message.includes("1 requête(s) (dont 0 vers carrefour.fr)"),
+    "Should report detailed HAR diagnostic"
+  );
+
+  const richHar = JSON.stringify({
+    log: {
+      entries: [
+        {
+          request: {
+            url: "https://www.carrefour.fr/mon-compte/mes-achats/en-magasin/3021080622705/20261113/9422/3-358-2001/pdf",
+            headers: [{ name: "Cookie", value: "session=abc123; token=xyz" }],
+          },
+          response: {
+            content: {
+              mimeType: "application/pdf",
+              encoding: "base64",
+              text: pdf1.toString("base64"),
+            },
+          },
+        },
+      ],
+    },
+  });
+  const harExtracted = extractDataFromHar(richHar);
+  assert.equal(harExtracted.carrefourEntryCount, 1);
+  assert.equal(harExtracted.cookieHeader, "session=abc123; token=xyz");
+  assert.equal(harExtracted.embeddedPdfs.length, 1);
+  assert.equal(harExtracted.embeddedPdfs[0].ticketKey, "3-358-2001");
+
+  const harPdfOnly = JSON.stringify({
+    log: {
+      entries: [
+        {
+          request: {
+            url: "https://www.carrefour.fr/mon-compte/mes-achats/en-magasin/3021080622705/20261113/9422/3-358-2001/pdf",
+            headers: [],
+          },
+          response: {
+            content: {
+              mimeType: "application/pdf",
+              encoding: "base64",
+              text: pdf1.toString("base64"),
+            },
+          },
+        },
+      ],
+    },
+  });
+  const harPdfRes = await syncFromCarrefourSession({
+    cookieOrCurl: "",
+    existingExternalIds: new Set(),
+    extraHarText: harPdfOnly,
+  });
+  assert.equal(harPdfRes.ok, true);
+  assert.equal(harPdfRes.downloadedPdfs.length, 1);
+  console.log("  OK HAR extraction & diagnostics verified!");
 
   console.log("ALL PARSER, DB & API ROUTE CHECKS PASSED!");
   await closeDb();

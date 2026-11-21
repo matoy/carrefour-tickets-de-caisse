@@ -587,7 +587,10 @@ export function SyncModal({
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   Optionnel : importer un fichier <code>.har</code> capturé sur
-                  carrefour.fr (extrait automatiquement les URLs de tickets)
+                  carrefour.fr (extrait les liens de tickets, PDF intégrés et
+                  cookies si l&apos;export inclut les données sensibles — Chrome
+                  retire les cookies des <code>.har</code> par défaut, collez
+                  donc un <code>Copy as cURL</code> ci-dessus si besoin)
                 </label>
                 <input
                   type="file"
