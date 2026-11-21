@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isApiRequestAuthenticated } from "@/lib/auth";
+import {
+  isApiRequestAuthenticated,
+  verifyBookmarkletToken,
+} from "@/lib/auth";
 import { parseCarrefourReceiptPdf } from "@/lib/parser/carrefour-pdf";
 import {
   insertParsedReceiptIfNew,
@@ -30,13 +33,6 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const cors = getCorsHeaders(request);
 
-  if (!isApiRequestAuthenticated(request)) {
-    return NextResponse.json(
-      { error: "Non autorisé" },
-      { status: 401, headers: cors }
-    );
-  }
-
   try {
     const contentType = request.headers.get("content-type") ?? "";
     const fileBuffers: Array<{
@@ -45,11 +41,35 @@ export async function POST(request: NextRequest) {
       source: "carrefour_sync" | "pdf_upload";
     }> = [];
 
-    if (contentType.includes("application/json")) {
-      const body = (await request.json()) as {
+    if (
+      contentType.includes("application/json") ||
+      contentType.includes("text/plain")
+    ) {
+      const rawBody = await request.text();
+      let body: {
+        syncToken?: string;
         source?: "carrefour_sync" | "pdf_upload";
         files?: Array<{ fileName: string; base64: string }>;
       };
+      try {
+        body = (rawBody ? JSON.parse(rawBody) : {}) as typeof body;
+      } catch {
+        return NextResponse.json(
+          { error: "Corps JSON invalide" },
+          { status: 400, headers: cors }
+        );
+      }
+
+      if (
+        !isApiRequestAuthenticated(request) &&
+        !verifyBookmarkletToken(body.syncToken)
+      ) {
+        return NextResponse.json(
+          { error: "Non autorisé" },
+          { status: 401, headers: cors }
+        );
+      }
+
       const source =
         body.source === "carrefour_sync" ? "carrefour_sync" : "pdf_upload";
       for (const f of body.files ?? []) {
@@ -64,6 +84,13 @@ export async function POST(request: NextRequest) {
         });
       }
     } else {
+      if (!isApiRequestAuthenticated(request)) {
+        return NextResponse.json(
+          { error: "Non autorisé" },
+          { status: 401, headers: cors }
+        );
+      }
+
       const formData = await request.formData();
       const allEntries = [
         ...formData.getAll("files"),

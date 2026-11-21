@@ -58,16 +58,26 @@ export function SyncModal({
     details?: string[];
   } | null>(null);
 
-  const appOrigin =
-    typeof window !== "undefined" ? window.location.origin : "";
+  const [targetOrigin, setTargetOrigin] = useState(() =>
+    typeof window !== "undefined" ? window.location.origin : ""
+  );
+
+  const cleanTargetOrigin = targetOrigin.trim().replace(/\/+$/, "");
+  const isVercelPreviewUrl = /-git-[^.]+\.vercel\.app$/i.test(
+    cleanTargetOrigin
+  );
+  const suggestedProdOrigin = isVercelPreviewUrl
+    ? cleanTargetOrigin.replace(/-git-[^.]+\.vercel\.app$/i, ".vercel.app")
+    : null;
 
   const bookmarkletSource = useMemo(() => {
     const tokenLiteral = JSON.stringify(syncToken);
-    const originLiteral = JSON.stringify(appOrigin);
+    const originLiteral = JSON.stringify(cleanTargetOrigin);
 
-    // Self-contained async script that runs inside https://www.carrefour.fr
-    return `(async()=>{const O=${originLiteral};const T=${tokenLiteral};const box=document.createElement('div');box.style.cssText='position:fixed;bottom:20px;right:20px;z-index:999999;background:#0f172a;color:#fff;padding:16px 20px;border-radius:14px;font:14px/1.4 system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.35);max-width:380px;';box.innerHTML='<b>Sync Carrefour -> App</b><div id="crf-sync-msg" style="margin-top:6px;color:#cbd5e1">Recherche des tickets...</div>';document.body.appendChild(box);const setMsg=(m)=>{const el=document.getElementById('crf-sync-msg');if(el)el.textContent=m;};try{const rx=/(?:https:\\/\\/www\\.carrefour\\.fr)?\\/mon-compte\\/mes-achats\\/en-magasin\\/(\\d{10,16})\\/(\\d{8})\\/(\\d+)\\/(\\d+-\\d+-\\d+)/g;const found=new Map();const scan=(txt)=>{let m;while((m=rx.exec(txt))!==null){const eid=m[2]+'-'+m[3]+'-'+m[4];if(!found.has(eid))found.set(eid,{gln:m[1],date:m[2],store:m[3],key:m[4],eid,url:'https://www.carrefour.fr/mon-compte/mes-achats/en-magasin/'+m[1]+'/'+m[2]+'/'+m[3]+'/'+m[4]});}};scan(document.documentElement.innerHTML);try{const r=await fetch('https://www.carrefour.fr/mon-compte/mes-achats/en-magasin',{credentials:'include'});if(r.ok)scan(await r.text());}catch{}const list=Array.from(found.values());if(!list.length){setMsg('Aucun ticket détecté sur cette page. Ouvrez Mes achats > En magasin puis relancez.');return;}setMsg(list.length+' ticket(s) détecté(s). Vérification des nouveaux...');const chk=await fetch(O+'/api/sync/check',{method:'POST',headers:{'Content-Type':'application/json','x-sync-token':T},body:JSON.stringify({externalIds:list.map(x=>x.eid)})});if(!chk.ok)throw new Error('Auth app refusée ('+chk.status+')');const {missingExternalIds}=await chk.json();const missing=list.filter(x=>missingExternalIds.includes(x.eid));if(!missing.length){setMsg('Tous vos tickets ('+list.length+') sont déjà synchronisés !');return;}setMsg(missing.length+' nouveau(x) ticket(s) à rapatrier...');const files=[];for(let i=0;i<missing.length;i++){const t=missing[i];setMsg('Téléchargement '+(i+1)+'/'+missing.length+' : '+t.key);const candidates=[t.url+'/pdf',t.url+'?format=pdf'];try{const dr=await fetch(t.url,{credentials:'include'});if(dr.ok){const dh=await dr.text();const pm=dh.match(/(\\/[^"'\\s<>]+?(?:_ticket\\.pdf|\\/pdf(?:\\?[^"'\\s<>]*)?))/i);if(pm)candidates.unshift(pm[1].startsWith('http')?pm[1]:'https://www.carrefour.fr'+pm[1]);}}catch{}for(const u of candidates){try{const pr=await fetch(u,{credentials:'include'});if(!pr.ok)continue;const ab=await pr.arrayBuffer();const bytes=new Uint8Array(ab);if(bytes[0]===37&&bytes[1]===80&&bytes[2]===68&&bytes[3]===70){let bin='';for(let j=0;j<bytes.length;j++)bin+=String.fromCharCode(bytes[j]);files.push({fileName:t.key+'_ticket.pdf',base64:btoa(bin)});break;}}catch{}}}if(!files.length){setMsg('Impossible de récupérer les PDF automatiquement. Téléchargez-les manuellement.');return;}setMsg('Envoi de '+files.length+' PDF vers votre base...');const up=await fetch(O+'/api/receipts/upload',{method:'POST',headers:{'Content-Type':'application/json','x-sync-token':T},body:JSON.stringify({source:'carrefour_sync',files})});const res=await up.json();setMsg('Terminé ! '+(res.insertedCount||0)+' nouveau(x) ticket(s) ajouté(s), '+(res.skippedCount||0)+' déjà présent(s).');}catch(e){setMsg('Erreur: '+(e&&e.message?e.message:e));}})();`;
-  }, [appOrigin, syncToken]);
+    // Self-contained async script that runs inside https://www.carrefour.fr.
+    // Uses text/plain + syncToken in JSON body to avoid CORS preflight.
+    return `(async()=>{const O=${originLiteral};const T=${tokenLiteral};const box=document.createElement('div');box.style.cssText='position:fixed;bottom:20px;right:20px;z-index:999999;background:#0f172a;color:#fff;padding:16px 20px;border-radius:14px;font:14px/1.4 system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.35);max-width:400px;';box.innerHTML='<b>Sync Carrefour -> App</b><div id="crf-sync-msg" style="margin-top:6px;color:#cbd5e1">Recherche des tickets...</div>';document.body.appendChild(box);const setMsg=(m)=>{const el=document.getElementById('crf-sync-msg');if(el)el.textContent=m;};try{const rx=/(?:https:\\/\\/www\\.carrefour\\.fr)?\\/mon-compte\\/mes-achats\\/en-magasin\\/(\\d{10,16})\\/(\\d{8})\\/(\\d+)\\/(\\d+-\\d+-\\d+)/g;const found=new Map();const scan=(txt)=>{let m;while((m=rx.exec(txt))!==null){const eid=m[2]+'-'+m[3]+'-'+m[4];if(!found.has(eid))found.set(eid,{gln:m[1],date:m[2],store:m[3],key:m[4],eid,url:'https://www.carrefour.fr/mon-compte/mes-achats/en-magasin/'+m[1]+'/'+m[2]+'/'+m[3]+'/'+m[4]});}};scan(document.documentElement.innerHTML);try{const r=await fetch('https://www.carrefour.fr/mon-compte/mes-achats/en-magasin',{credentials:'include'});if(r.ok)scan(await r.text());}catch{}const list=Array.from(found.values());if(!list.length){setMsg('Aucun ticket détecté sur cette page. Ouvrez Mes achats > En magasin puis relancez.');return;}setMsg(list.length+' ticket(s) détecté(s). Vérification des nouveaux...');const chk=await fetch(O+'/api/sync/check',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({syncToken:T,externalIds:list.map(x=>x.eid)})});if(!chk.ok)throw new Error('Auth app refusée ('+chk.status+')');const {missingExternalIds}=await chk.json();const missing=list.filter(x=>missingExternalIds.includes(x.eid));if(!missing.length){setMsg('Tous vos tickets ('+list.length+') sont déjà synchronisés !');return;}setMsg(missing.length+' nouveau(x) ticket(s) à rapatrier...');const files=[];for(let i=0;i<missing.length;i++){const t=missing[i];setMsg('Téléchargement '+(i+1)+'/'+missing.length+' : '+t.key);const candidates=[t.url+'/pdf',t.url+'?format=pdf'];try{const dr=await fetch(t.url,{credentials:'include'});if(dr.ok){const dh=await dr.text();const pm=dh.match(/(\\/[^"'\\s<>]+?(?:_ticket\\.pdf|\\/pdf(?:\\?[^"'\\s<>]*)?))/i);if(pm)candidates.unshift(pm[1].startsWith('http')?pm[1]:'https://www.carrefour.fr'+pm[1]);}}catch{}for(const u of candidates){try{const pr=await fetch(u,{credentials:'include'});if(!pr.ok)continue;const ab=await pr.arrayBuffer();const bytes=new Uint8Array(ab);if(bytes[0]===37&&bytes[1]===80&&bytes[2]===68&&bytes[3]===70){let bin='';for(let j=0;j<bytes.length;j++)bin+=String.fromCharCode(bytes[j]);files.push({fileName:t.key+'_ticket.pdf',base64:btoa(bin)});break;}}catch{}}}if(!files.length){setMsg('Impossible de récupérer les PDF automatiquement. Téléchargez-les manuellement.');return;}let ins=0;let skp=0;for(let b=0;b<files.length;b+=5){const batch=files.slice(b,b+5);setMsg('Envoi lot '+(Math.floor(b/5)+1)+'/'+Math.ceil(files.length/5)+' ('+files.length+' PDF)...');const up=await fetch(O+'/api/receipts/upload',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({syncToken:T,source:'carrefour_sync',files:batch})});if(!up.ok)throw new Error('Upload refusé ('+up.status+')');const res=await up.json();ins+=(res.insertedCount||0);skp+=(res.skippedCount||0);}setMsg('Terminé ! '+ins+' nouveau(x) ticket(s) ajouté(s), '+skp+' déjà présent(s).');}catch(e){const msg=e&&e.message?String(e.message):String(e);if(/failed to fetch|networkerror|load failed/i.test(msg)){setMsg('Bloqué par CORS ou Vercel Deployment Protection. Utilisez votre URL Production (sans -git-main) et désactivez Vercel Authentication dans Settings > Deployment Protection.');}else{setMsg('Erreur: '+msg);}}})();`;
+  }, [cleanTargetOrigin, syncToken]);
 
   const bookmarkletHref = `javascript:${encodeURIComponent(bookmarkletSource)}`;
 
@@ -375,6 +385,47 @@ export function SyncModal({
                   dans votre base, télécharge uniquement les nouveaux PDF et les
                   envoie ici.
                 </p>
+              </div>
+
+              {isVercelPreviewUrl && (
+                <div className="rounded-xl bg-amber-50 border border-amber-300 p-3.5 text-xs text-amber-950 space-y-2">
+                  <p className="font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    URL de Preview Vercel détectée (<code>-git-...</code>)
+                  </p>
+                  <p className="text-amber-900 leading-relaxed">
+                    Les URLs de branche Vercel (<code>*-git-main-*.vercel.app</code>)
+                    ont la <strong>Deployment Protection</strong> activée par
+                    défaut, ce qui redirige les requêtes depuis{" "}
+                    <code>carrefour.fr</code> et bloque le Bookmarklet en CORS.
+                    Utilisez votre URL <strong>Production</strong> (sans{" "}
+                    <code>-git-main</code>) ou désactivez{" "}
+                    <em>Vercel Authentication</em> dans{" "}
+                    <strong>Project Settings → Deployment Protection</strong>.
+                  </p>
+                  {suggestedProdOrigin && (
+                    <button
+                      type="button"
+                      onClick={() => setTargetOrigin(suggestedProdOrigin)}
+                      className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer"
+                    >
+                      Basculer vers {suggestedProdOrigin}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  URL cible de votre application (domaine Production Vercel)
+                </label>
+                <input
+                  type="url"
+                  value={targetOrigin}
+                  onChange={(e) => setTargetOrigin(e.target.value)}
+                  placeholder="https://votre-app.vercel.app"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                />
               </div>
 
               <div className="space-y-3 text-sm text-slate-700">

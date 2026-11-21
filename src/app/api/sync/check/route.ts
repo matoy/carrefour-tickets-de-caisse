@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isApiRequestAuthenticated } from "@/lib/auth";
+import {
+  isApiRequestAuthenticated,
+  verifyBookmarkletToken,
+} from "@/lib/auth";
 import { ensureDbInitialized } from "@/lib/db";
 import { receipts } from "@/lib/db/schema";
 
@@ -26,18 +29,31 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const cors = getCorsHeaders(request);
 
-  if (!isApiRequestAuthenticated(request)) {
-    return NextResponse.json(
-      { error: "Non autorisé" },
-      { status: 401, headers: cors }
-    );
-  }
-
   try {
-    const body = (await request.json()) as {
+    const rawBody = await request.text();
+    let body: {
+      syncToken?: string;
       externalIds?: string[];
       ticketKeys?: string[];
     };
+    try {
+      body = (rawBody ? JSON.parse(rawBody) : {}) as typeof body;
+    } catch {
+      return NextResponse.json(
+        { error: "Corps JSON invalide" },
+        { status: 400, headers: cors }
+      );
+    }
+
+    if (
+      !isApiRequestAuthenticated(request) &&
+      !verifyBookmarkletToken(body.syncToken)
+    ) {
+      return NextResponse.json(
+        { error: "Non autorisé" },
+        { status: 401, headers: cors }
+      );
+    }
 
     const db = await ensureDbInitialized();
     const existingRows = await db

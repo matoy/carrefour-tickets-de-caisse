@@ -9,6 +9,7 @@ import {
   listReceipts,
 } from "../src/lib/db/receipt-service";
 import { closeDb, ensureDbInitialized } from "../src/lib/db";
+import { createBookmarkletToken } from "../src/lib/auth";
 import { GET as getReceiptsRoute } from "../src/app/api/receipts/route";
 import { GET as getProductsRoute } from "../src/app/api/products/route";
 import { POST as postProductNoteRoute } from "../src/app/api/products/note/route";
@@ -176,13 +177,21 @@ async function main() {
   const syncCheckRes = await postSyncCheckRoute(
     new NextRequest("http://localhost:3000/api/sync/check", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "text/plain",
+        Origin: "https://www.carrefour.fr",
+      },
       body: JSON.stringify({
+        syncToken: createBookmarkletToken(),
         externalIds: ["20261101-7837-3-8993-1157", "20990101-0000-1-1-0000"],
       }),
     })
   );
   assert.equal(syncCheckRes.status, 200);
+  assert.equal(
+    syncCheckRes.headers.get("Access-Control-Allow-Origin"),
+    "https://www.carrefour.fr"
+  );
   const syncCheckJson = (await syncCheckRes.json()) as {
     missingExternalIds: string[];
   };
