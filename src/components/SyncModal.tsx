@@ -150,20 +150,19 @@ export function SyncModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
+      <div className="w-full max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92dvh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-slate-50">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <FileText className="h-5 w-5 text-blue-600" />
-              Importer des tickets & factures PDF
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600 shrink-0" />
+              Importer des PDF
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Détection automatique Carrefour & Monoprix Courses (avec remise M+
-              10%) · Déduplication automatique.
+              Détection automatique Carrefour & Monoprix (remise M+ 10%).
               {lastSyncAt
-                ? ` Dernier import : ${new Date(lastSyncAt).toLocaleString("fr-FR")}`
+                ? ` Dernier import : ${new Date(lastSyncAt).toLocaleDateString("fr-FR")}`
                 : ""}
             </p>
           </div>
@@ -177,8 +176,8 @@ export function SyncModal({
         </div>
 
         {/* Body */}
-        <div className="p-6 overflow-y-auto space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div className="p-4 sm:p-6 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-6 overflow-y-auto space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-xs">
             <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-3">
               <div className="font-bold text-blue-900">Carrefour (Magasin)</div>
               <p className="text-blue-800 mt-0.5">
@@ -205,19 +204,19 @@ export function SyncModal({
             }}
             onDragLeave={() => setDragActive(false)}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-2xl p-8 text-center transition ${
+            className={`border-2 border-dashed rounded-2xl p-5 sm:p-8 text-center transition ${
               dragActive
                 ? "border-blue-500 bg-blue-50"
                 : "border-slate-300 hover:border-slate-400 bg-slate-50/50"
             }`}
           >
-            <Upload className="h-8 w-8 text-blue-600 mx-auto mb-3" />
+            <Upload className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 mx-auto mb-2.5 sm:mb-3" />
             <p className="text-sm font-semibold text-slate-800">
-              Glissez-déposez vos tickets Carrefour ou factures Monoprix (.pdf)
+              Sélectionnez ou déposez vos tickets et factures (.pdf)
             </p>
             <p className="text-xs text-slate-500 mt-1 mb-4">
-              Vous pouvez déposer plusieurs PDF des deux enseignes en une seule
-              fois. Les doublons sont automatiquement ignorés.
+              Vous pouvez importer plusieurs PDF des deux enseignes à la fois.
+              Les doublons sont ignorés.
             </p>
             <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer">
               <Upload className="h-3.5 w-3.5" />

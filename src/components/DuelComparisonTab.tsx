@@ -317,91 +317,120 @@ export function DuelComparisonTab({
   }, [monoprixProducts, monoprixSearch]);
 
   return (
-    <div className="space-y-5">
-      {/* Scoreboard */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl border border-blue-200 p-4 shadow-2xs flex items-center justify-between">
-          <div>
-            <div className="text-xs font-semibold text-blue-700 uppercase">
-              Moins cher chez Carrefour
+    <div className="space-y-4 sm:space-y-5">
+      {/* Scoreboard — compact 3-col strip on mobile */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-blue-200 p-2.5 sm:p-4 shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs font-semibold text-blue-700 uppercase truncate">
+              <span className="sm:hidden">Carrefour</span>
+              <span className="hidden sm:inline">Moins cher chez Carrefour</span>
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">
-              {summary.carrefourWins} produit(s)
+            <div className="text-base sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">
+              {summary.carrefourWins}{" "}
+              <span className="text-[11px] sm:text-sm font-medium text-slate-500">
+                <span className="sm:hidden">art.</span>
+                <span className="hidden sm:inline">produit(s)</span>
+              </span>
             </div>
-            <div className="text-xs text-slate-500">
-              Panier duels 100% Carrefour :{" "}
+            <div className="text-[11px] sm:text-xs text-slate-500 truncate">
+              <span className="hidden sm:inline">Panier duels 100% Carrefour : </span>
               <strong>{summary.totalCarrefourBasket.toFixed(2)} €</strong>
             </div>
           </div>
-          <div className="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+          <div className="hidden sm:flex h-11 w-11 rounded-xl bg-blue-50 text-blue-600 items-center justify-center shrink-0">
             <Trophy className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-rose-200 p-4 shadow-2xs flex items-center justify-between">
-          <div>
-            <div className="text-xs font-semibold text-rose-700 uppercase">
-              Moins cher chez Monoprix
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-rose-200 p-2.5 sm:p-4 shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs font-semibold text-rose-700 uppercase truncate">
+              <span className="sm:hidden">Monoprix</span>
+              <span className="hidden sm:inline">Moins cher chez Monoprix</span>
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">
-              {summary.monoprixWins} produit(s)
+            <div className="text-base sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">
+              {summary.monoprixWins}{" "}
+              <span className="text-[11px] sm:text-sm font-medium text-slate-500">
+                <span className="sm:hidden">art.</span>
+                <span className="hidden sm:inline">produit(s)</span>
+              </span>
             </div>
-            <div className="text-xs text-slate-500">
-              Panier duels 100% Monoprix :{" "}
+            <div className="text-[11px] sm:text-xs text-slate-500 truncate">
+              <span className="hidden sm:inline">Panier duels 100% Monoprix : </span>
               <strong>{summary.totalMonoprixBasket.toFixed(2)} €</strong>
             </div>
           </div>
-          <div className="h-11 w-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+          <div className="hidden sm:flex h-11 w-11 rounded-xl bg-rose-50 text-rose-600 items-center justify-center shrink-0">
             <Trophy className="h-5 w-5" />
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-50 to-white rounded-2xl border border-emerald-200 p-4 shadow-2xs flex items-center justify-between">
-          <div>
-            <div className="text-xs font-semibold text-emerald-800 uppercase">
-              Panier optimal (mixte)
+        <div className="bg-gradient-to-br from-emerald-50 to-white rounded-xl sm:rounded-2xl border border-emerald-200 p-2.5 sm:p-4 shadow-2xs flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs font-semibold text-emerald-800 uppercase truncate">
+              <span className="sm:hidden">Optimal</span>
+              <span className="hidden sm:inline">Panier optimal (mixte)</span>
             </div>
-            <div className="text-2xl font-bold text-emerald-700 mt-1">
+            <div className="text-base sm:text-2xl font-bold text-emerald-700 mt-0.5 sm:mt-1">
               {summary.totalBestBasket.toFixed(2)} €
             </div>
-            <div className="text-xs text-emerald-700">
-              {summary.totalPotentialSavedVsWorst > 0
-                ? `-${summary.totalPotentialSavedVsWorst.toFixed(2)} € vs l'enseigne la plus chère`
-                : "Créez des duels pour calculer vos gains"}
+            <div className="text-[11px] sm:text-xs text-emerald-700 truncate">
+              {summary.totalPotentialSavedVsWorst > 0 ? (
+                <>
+                  -{summary.totalPotentialSavedVsWorst.toFixed(2)} €{" "}
+                  <span className="hidden sm:inline">
+                    vs l&apos;enseigne la plus chère
+                  </span>
+                </>
+              ) : (
+                <span className="hidden sm:inline">
+                  Créez des duels pour calculer vos gains
+                </span>
+              )}
             </div>
           </div>
-          <div className="h-11 w-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+          <div className="hidden sm:flex h-11 w-11 rounded-xl bg-emerald-100 text-emerald-700 items-center justify-center shrink-0">
             <ArrowRightLeft className="h-5 w-5" />
           </div>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
-        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-2xs space-y-2.5 sm:space-y-3">
+        <div className="flex flex-col md:flex-row gap-2.5 sm:gap-3 items-stretch md:items-center justify-between">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filtrer vos duels (ex: sucrine, pain au lait, saumon...)"
-              className="w-full pl-10 pr-8 py-2 rounded-xl border border-slate-300 text-sm focus:border-blue-500 outline-none"
+              placeholder="Filtrer vos duels (sucrine, lait...)"
+              className="w-full pl-10 pr-9 py-2 rounded-xl border border-slate-300 text-base sm:text-sm focus:border-blue-500 outline-none"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <select
               value={duelSort}
               onChange={(e) => setDuelSort(e.target.value as DuelSort)}
-              className="px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white text-slate-700 outline-none"
+              className="flex-1 sm:flex-none px-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm bg-white text-slate-700 outline-none"
             >
               <option value="savings_pct">Tri : Plus gros écart %</option>
               <option value="savings_abs">Tri : Plus grosse économie €</option>
               <option value="name">Tri : Nom A-Z</option>
             </select>
 
-            <div className="inline-flex rounded-xl border border-slate-300 p-0.5 bg-slate-50 text-xs font-medium">
+            <div className="inline-flex rounded-xl border border-slate-300 p-0.5 bg-slate-50 text-xs font-medium shrink-0">
               <button
                 type="button"
                 onClick={() => onChangeCompareBasis("net")}
@@ -411,7 +440,10 @@ export function DuelComparisonTab({
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Prix net (-10% Club / M+)
+                <span className="sm:hidden">Net -10%</span>
+                <span className="hidden sm:inline">
+                  Prix net (-10% Club / M+)
+                </span>
               </button>
               <button
                 type="button"
@@ -422,14 +454,14 @@ export function DuelComparisonTab({
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Prix affiché
+                Affiché
               </button>
             </div>
 
             <button
               type="button"
               onClick={openNewDuelModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold cursor-pointer"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold cursor-pointer"
             >
               <Plus className="h-4 w-4" />
               <span>Créer un duel</span>
@@ -437,12 +469,12 @@ export function DuelComparisonTab({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <div className="flex overflow-x-auto no-scrollbar flex-nowrap sm:flex-wrap items-center gap-1.5 text-xs -mx-1 px-1 pb-0.5">
           {(
             [
               ["all", `Tous (${comparisons.length})`],
-              ["carrefour", `Avantage Carrefour (${summary.carrefourWins})`],
-              ["monoprix", `Avantage Monoprix (${summary.monoprixWins})`],
+              ["carrefour", `Carrefour (${summary.carrefourWins})`],
+              ["monoprix", `Monoprix (${summary.monoprixWins})`],
               ["incomplete", "À compléter"],
             ] as const
           ).map(([key, label]) => (
@@ -450,7 +482,7 @@ export function DuelComparisonTab({
               key={key}
               type="button"
               onClick={() => setWinnerFilter(key)}
-              className={`px-3 py-1.5 rounded-full font-medium cursor-pointer transition ${
+              className={`px-3 py-1.5 rounded-full font-medium cursor-pointer transition shrink-0 ${
                 winnerFilter === key
                   ? "bg-slate-900 text-white"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -512,32 +544,32 @@ export function DuelComparisonTab({
                 return (
                   <div
                     key={pairKey}
-                    className="bg-white rounded-xl border border-amber-200/80 p-3 flex items-center justify-between gap-3"
+                    className="bg-white rounded-xl border border-amber-200/80 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3"
                   >
-                    <div className="min-w-0 space-y-1 text-xs">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
-                          Carrefour : {cPrice}
+                    <div className="min-w-0 space-y-1.5 text-xs flex-1">
+                      <div className="flex items-start gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold shrink-0">
+                          CRF : {cPrice}
                         </span>
-                        <span className="truncate font-medium text-slate-800">
+                        <span className="font-medium text-slate-800 line-clamp-2">
                           {s.carrefourProduct.rawLabel}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-semibold">
-                          Monoprix : {mPrice}
+                      <div className="flex items-start gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-semibold shrink-0">
+                          MNP : {mPrice}
                         </span>
-                        <span className="truncate font-medium text-slate-800">
+                        <span className="font-medium text-slate-800 line-clamp-2">
                           {s.monoprixProduct.rawLabel}
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="grid grid-cols-2 sm:flex items-center gap-1.5 w-full sm:w-auto shrink-0">
                       <button
                         type="button"
                         disabled={isBusy}
                         onClick={() => handleAcceptSuggestion(s)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1 px-2.5 py-2 sm:py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
                       >
                         <Check className="h-3.5 w-3.5" />
                         <span>Valider</span>
@@ -547,7 +579,7 @@ export function DuelComparisonTab({
                         disabled={isBusy}
                         onClick={() => handleDismissSuggestion(s)}
                         title="Ne pas associer ces deux produits"
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer disabled:opacity-50"
+                        className="inline-flex items-center justify-center gap-1 px-2.5 py-2 sm:py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer disabled:opacity-50"
                       >
                         <X className="h-3.5 w-3.5" />
                         <span>Ignorer</span>
@@ -642,42 +674,44 @@ export function DuelComparisonTab({
                   </div>
                 </div>
 
-                {/* Side by side cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Side by side cards — compact 2-column comparison even on mobile */}
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   {/* Carrefour side */}
                   <div
-                    className={`rounded-xl p-3 border ${
+                    className={`rounded-xl p-2.5 sm:p-3 border ${
                       res.winner === "carrefour"
                         ? "bg-blue-50/80 border-blue-300"
                         : "bg-slate-50/70 border-slate-200"
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-bold uppercase text-blue-800">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[10px] sm:text-[11px] font-bold uppercase text-blue-800">
                         Carrefour
                       </span>
                       {c.carrefourProduct && (
-                        <span className="text-[11px] text-slate-500">
+                        <span className="text-[10px] sm:text-[11px] text-slate-500 truncate">
                           {new Date(
                             c.carrefourProduct.lastPurchaseDate
-                          ).toLocaleDateString("fr-FR")}{" "}
-                          ·{" "}
-                          {c.carrefourProduct.lastStoreName.replace(/_/g, " ")}
+                          ).toLocaleDateString("fr-FR")}
+                          <span className="hidden sm:inline">
+                            {" "}
+                            · {c.carrefourProduct.lastStoreName.replace(/_/g, " ")}
+                          </span>
                         </span>
                       )}
                     </div>
                     {c.carrefourProduct ? (
-                      <div className="flex items-baseline justify-between gap-2">
-                        <div className="text-xs font-medium text-slate-700 truncate">
+                      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-2">
+                        <div className="text-[11px] sm:text-xs font-medium text-slate-700 line-clamp-2 sm:truncate">
                           {c.carrefourProduct.rawLabel}
                         </div>
-                        <div className="text-right shrink-0">
-                          <span className="text-lg font-bold text-slate-900">
+                        <div className="sm:text-right shrink-0">
+                          <span className="text-base sm:text-lg font-bold text-slate-900">
                             {res.carrefourPrice?.toFixed(2)} {res.unitLabel}
                           </span>
                           {c.compareMode === "unit" &&
                             c.carrefourProduct.lastNetPricePerKgOrL !== null && (
-                              <div className="text-[11px] text-blue-700">
+                              <div className="text-[10px] sm:text-[11px] text-blue-700">
                                 {(compareBasis === "net"
                                   ? c.carrefourProduct.lastNetPricePerKgOrL
                                   : c.carrefourProduct.lastPricePerKgOrL
@@ -691,26 +725,29 @@ export function DuelComparisonTab({
                         </div>
                       </div>
                     ) : (
-                      <div className="text-xs text-slate-400 italic">
-                        Aucun produit Carrefour associé
+                      <div className="text-[11px] sm:text-xs text-slate-400 italic">
+                        Non associé
                       </div>
                     )}
                   </div>
 
                   {/* Monoprix side */}
                   <div
-                    className={`rounded-xl p-3 border ${
+                    className={`rounded-xl p-2.5 sm:p-3 border ${
                       res.winner === "monoprix"
                         ? "bg-rose-50/80 border-rose-300"
                         : "bg-slate-50/70 border-slate-200"
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-bold uppercase text-rose-800">
-                        Monoprix (incl. -10% M+)
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[10px] sm:text-[11px] font-bold uppercase text-rose-800">
+                        <span className="sm:hidden">Monoprix</span>
+                        <span className="hidden sm:inline">
+                          Monoprix (incl. -10% M+)
+                        </span>
                       </span>
                       {c.monoprixProduct && (
-                        <span className="text-[11px] text-slate-500">
+                        <span className="text-[10px] sm:text-[11px] text-slate-500 truncate">
                           {new Date(
                             c.monoprixProduct.lastPurchaseDate
                           ).toLocaleDateString("fr-FR")}
@@ -718,17 +755,17 @@ export function DuelComparisonTab({
                       )}
                     </div>
                     {c.monoprixProduct ? (
-                      <div className="flex items-baseline justify-between gap-2">
-                        <div className="text-xs font-medium text-slate-700 truncate">
+                      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 sm:gap-2">
+                        <div className="text-[11px] sm:text-xs font-medium text-slate-700 line-clamp-2 sm:truncate">
                           {c.monoprixProduct.rawLabel}
                         </div>
-                        <div className="text-right shrink-0">
-                          <span className="text-lg font-bold text-slate-900">
+                        <div className="sm:text-right shrink-0">
+                          <span className="text-base sm:text-lg font-bold text-slate-900">
                             {res.monoprixPrice?.toFixed(2)} {res.unitLabel}
                           </span>
                           {c.compareMode === "unit" &&
                             c.monoprixProduct.lastNetPricePerKgOrL !== null && (
-                              <div className="text-[11px] text-rose-700">
+                              <div className="text-[10px] sm:text-[11px] text-rose-700">
                                 {(compareBasis === "net"
                                   ? c.monoprixProduct.lastNetPricePerKgOrL
                                   : c.monoprixProduct.lastPricePerKgOrL
@@ -742,8 +779,8 @@ export function DuelComparisonTab({
                         </div>
                       </div>
                     ) : (
-                      <div className="text-xs text-slate-400 italic">
-                        Aucun produit Monoprix associé
+                      <div className="text-[11px] sm:text-xs text-slate-400 italic">
+                        Non associé
                       </div>
                     )}
                   </div>
@@ -756,9 +793,9 @@ export function DuelComparisonTab({
 
       {/* Create / Edit Duel Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
+          <div className="w-full max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92dvh]">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-slate-50">
               <h3 className="text-base font-bold text-slate-900">
                 {editingId !== null
                   ? "Modifier le duel Carrefour vs Monoprix"
@@ -773,7 +810,7 @@ export function DuelComparisonTab({
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-4">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -784,7 +821,7 @@ export function DuelComparisonTab({
                     value={duelName}
                     onChange={(e) => setDuelName(e.target.value)}
                     placeholder="Ex: Sucrine, Pains au lait Bio, Lait sans lactose..."
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
@@ -796,7 +833,7 @@ export function DuelComparisonTab({
                     onChange={(e) =>
                       setDuelMode(e.target.value as CompareMode)
                     }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white outline-none focus:border-blue-500"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-base sm:text-sm bg-white outline-none focus:border-blue-500"
                   >
                     <option value="unit">À l&apos;unité / paquet</option>
                     <option value="per_kg_or_l">Au kilo / au litre</option>
@@ -815,7 +852,7 @@ export function DuelComparisonTab({
                     value={carrefourSearch}
                     onChange={(e) => setCarrefourSearch(e.target.value)}
                     placeholder="Rechercher chez Carrefour..."
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-blue-200 bg-white text-xs outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-blue-200 bg-white text-base sm:text-xs outline-none"
                   />
                   <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
                     {filteredCarrefourPicker.map((p) => {
@@ -865,7 +902,7 @@ export function DuelComparisonTab({
                     value={monoprixSearch}
                     onChange={(e) => setMonoprixSearch(e.target.value)}
                     placeholder="Rechercher chez Monoprix..."
-                    className="w-full px-2.5 py-1.5 rounded-lg border border-rose-200 bg-white text-xs outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-rose-200 bg-white text-base sm:text-xs outline-none"
                   />
                   <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
                     {filteredMonoprixPicker.map((p) => {
@@ -907,7 +944,7 @@ export function DuelComparisonTab({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 px-6 py-3 border-t border-slate-200 bg-slate-50">
+            <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-slate-200 bg-slate-50">
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}

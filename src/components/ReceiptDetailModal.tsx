@@ -51,11 +51,11 @@ export function ReceiptDetailModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
+      <div className="w-full max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92dvh]">
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <div className="space-y-1">
+        <div className="flex items-start justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-slate-50">
+          <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <ReceiptIcon
                 className={`h-5 w-5 ${
@@ -71,11 +71,11 @@ export function ReceiptDetailModal({
               >
                 {isMonoprix ? "Monoprix" : "Carrefour"}
               </span>
-              <h2 className="text-lg font-bold text-slate-900">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 truncate">
                 {receipt.storeName}
               </h2>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-500">
               <span className="inline-flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5" />
                 {new Date(receipt.purchaseDate).toLocaleString("fr-FR", {
@@ -96,7 +96,7 @@ export function ReceiptDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-500 hover:bg-slate-200/70 transition cursor-pointer"
+            className="p-2 rounded-lg text-slate-500 hover:bg-slate-200/70 transition cursor-pointer shrink-0"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
@@ -104,15 +104,23 @@ export function ReceiptDetailModal({
         </div>
 
         {/* Receipt body */}
-        <div className="p-6 overflow-y-auto space-y-5">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-5">
           <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
+            <table className="w-full text-xs sm:text-sm">
+              <thead className="bg-slate-50 text-[11px] sm:text-xs uppercase tracking-wide text-slate-500 border-b border-slate-200">
                 <tr>
-                  <th className="text-left py-2.5 px-3">Article</th>
-                  <th className="text-right py-2.5 px-3">Qté × P.U.</th>
-                  <th className="text-right py-2.5 px-3">Brut</th>
-                  <th className="text-right py-2.5 px-3">Net réel</th>
+                  <th className="text-left py-2 px-2.5 sm:py-2.5 sm:px-3">
+                    Article
+                  </th>
+                  <th className="text-right py-2 px-2 sm:py-2.5 sm:px-3">
+                    Qté × P.U.
+                  </th>
+                  <th className="hidden sm:table-cell text-right py-2.5 px-3">
+                    Brut
+                  </th>
+                  <th className="text-right py-2 px-2.5 sm:py-2.5 sm:px-3">
+                    Net réel
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -121,11 +129,11 @@ export function ReceiptDetailModal({
                     item.immediateDiscount > 0 || item.loyaltyDiscount > 0;
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/70">
-                      <td className="py-2.5 px-3">
+                      <td className="py-2 px-2.5 sm:py-2.5 sm:px-3">
                         <div className="font-medium text-slate-900">
                           {item.rawLabel}
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-slate-500">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-0.5 text-[11px] sm:text-xs text-slate-500">
                           {item.vatRate !== null && (
                             <span>TVA {item.vatRate.toFixed(1)}%</span>
                           )}
@@ -164,18 +172,23 @@ export function ReceiptDetailModal({
                           )}
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 text-right text-slate-600 whitespace-nowrap font-mono text-xs">
+                      <td className="py-2 px-2 sm:py-2.5 sm:px-3 text-right text-slate-600 whitespace-nowrap font-mono text-[11px] sm:text-xs">
                         {item.quantity} × {item.unitPrice.toFixed(2)} €
                       </td>
-                      <td className="py-2.5 px-3 text-right font-medium text-slate-800 whitespace-nowrap">
+                      <td className="hidden sm:table-cell py-2.5 px-3 text-right font-medium text-slate-800 whitespace-nowrap">
                         {item.totalPrice.toFixed(2)} €
                       </td>
                       <td
-                        className={`py-2.5 px-3 text-right font-semibold whitespace-nowrap ${
+                        className={`py-2 px-2.5 sm:py-2.5 sm:px-3 text-right font-semibold whitespace-nowrap ${
                           hasDiscount ? "text-emerald-700" : "text-slate-900"
                         }`}
                       >
-                        {item.netTotalPrice.toFixed(2)} €
+                        <div>{item.netTotalPrice.toFixed(2)} €</div>
+                        {hasDiscount && (
+                          <div className="sm:hidden text-[10px] font-normal text-slate-400 line-through">
+                            {item.totalPrice.toFixed(2)} €
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -251,7 +264,7 @@ export function ReceiptDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-3 border-t border-slate-200 bg-slate-50">
           {!confirmDelete ? (
             <button
               type="button"

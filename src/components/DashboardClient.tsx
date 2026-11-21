@@ -376,17 +376,20 @@ export function DashboardClient({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Top Navbar */}
+      {/* Top Navbar — ultra compact on mobile */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-rose-600 text-white flex items-center justify-center shadow-sm">
-              <ShoppingCart className="h-5 w-5" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-rose-600 text-white flex items-center justify-center shadow-sm shrink-0">
+              <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold tracking-tight text-slate-900">
-                  Mes Courses — Carrefour vs Monoprix
+                <h1 className="text-sm sm:text-lg font-bold tracking-tight text-slate-900 truncate">
+                  <span className="sm:hidden">Mes Courses</span>
+                  <span className="hidden sm:inline">
+                    Mes Courses — Carrefour vs Monoprix
+                  </span>
                 </h1>
                 <span
                   className={`hidden sm:inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${
@@ -405,23 +408,24 @@ export function DashboardClient({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="hidden sm:block text-xs text-slate-500">
                 Comparez vos prix nets réels (-10% Club Carrefour & -10% remise
                 M+) sur tous vos achats PDF
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setSyncModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition cursor-pointer"
             >
               <Upload
-                className={`h-4 w-4 ${refreshing ? "animate-pulse" : ""}`}
+                className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${refreshing ? "animate-pulse" : ""}`}
               />
-              <span>Importer des PDF</span>
+              <span className="sm:hidden">Importer</span>
+              <span className="hidden sm:inline">Importer des PDF</span>
             </button>
 
             {authEnabled && (
@@ -429,7 +433,7 @@ export function DashboardClient({
                 type="button"
                 onClick={handleLogout}
                 title="Se déconnecter"
-                className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
+                className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -438,69 +442,68 @@ export function DashboardClient({
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* KPI Cards */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
-            <div className="text-xs font-medium text-slate-500 flex items-center justify-between">
-              <span>Documents importés</span>
-              <ReceiptIcon className="h-4 w-4 text-blue-600" />
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-6 pb-24 md:pb-6 space-y-4 sm:space-y-6">
+        {/* KPI Cards — horizontal swipe strip on mobile, 2/4-col grid on desktop */}
+        <section className="flex overflow-x-auto no-scrollbar snap-x gap-2.5 -mx-3 px-3 pb-1 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4 sm:overflow-visible">
+          <div className="min-w-[146px] sm:min-w-0 snap-start shrink-0 bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-2.5 sm:p-4 shadow-2xs">
+            <div className="text-[11px] sm:text-xs font-medium text-slate-500 flex items-center justify-between gap-2">
+              <span>Documents</span>
+              <ReceiptIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600 shrink-0" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">
+            <div className="text-lg sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">
               {stats.totalReceipts}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {stats.carrefourCount} Carrefour · {stats.monoprixCount} Monoprix
+            <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5 whitespace-nowrap">
+              {stats.carrefourCount} CRF · {stats.monoprixCount} MNP
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
-            <div className="text-xs font-medium text-slate-500 flex items-center justify-between">
+          <div className="min-w-[152px] sm:min-w-0 snap-start shrink-0 bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-2.5 sm:p-4 shadow-2xs">
+            <div className="text-[11px] sm:text-xs font-medium text-slate-500 flex items-center justify-between gap-2">
               <span>Produits & Duels</span>
-              <Swords className="h-4 w-4 text-indigo-600" />
+              <Swords className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600 shrink-0" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">
+            <div className="text-lg sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">
               {products.length}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {comparisons.length} duel(s) actif(s) · {suggestions.length}{" "}
-              suggestion(s)
+            <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5 whitespace-nowrap">
+              {comparisons.length} duel(s) · {suggestions.length} sugg.
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs">
-            <div className="text-xs font-medium text-slate-500 flex items-center justify-between">
+          <div className="min-w-[156px] sm:min-w-0 snap-start shrink-0 bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-2.5 sm:p-4 shadow-2xs">
+            <div className="text-[11px] sm:text-xs font-medium text-slate-500 flex items-center justify-between gap-2">
               <span>Total dépensé</span>
-              <ShoppingCart className="h-4 w-4 text-slate-600" />
+              <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-600 shrink-0" />
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">
+            <div className="text-lg sm:text-2xl font-bold text-slate-900 mt-0.5 sm:mt-1">
               {stats.totalSpent.toFixed(2)} €
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {stats.carrefourSpent.toFixed(2)} € CRF ·{" "}
-              {stats.monoprixSpent.toFixed(2)} € MNP
+            <div className="text-[11px] sm:text-xs text-slate-500 mt-0.5 whitespace-nowrap">
+              {stats.carrefourSpent.toFixed(0)} € CRF ·{" "}
+              {stats.monoprixSpent.toFixed(0)} € MNP
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-white p-4 shadow-2xs">
-            <div className="text-xs font-medium text-emerald-800 flex items-center justify-between">
-              <span>Économies & Fidélité</span>
-              <Award className="h-4 w-4 text-emerald-600" />
+          <div className="min-w-[168px] sm:min-w-0 snap-start shrink-0 bg-white rounded-xl sm:rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-white p-2.5 sm:p-4 shadow-2xs">
+            <div className="text-[11px] sm:text-xs font-medium text-emerald-800 flex items-center justify-between gap-2">
+              <span>Économies</span>
+              <Award className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 shrink-0" />
             </div>
-            <div className="text-2xl font-bold text-emerald-700 mt-1">
+            <div className="text-lg sm:text-2xl font-bold text-emerald-700 mt-0.5 sm:mt-1">
               {stats.totalSaved.toFixed(2)} €
             </div>
-            <div className="text-xs text-emerald-700/80 mt-0.5">
-              {stats.totalImmediateSaved.toFixed(2)} € promos ·{" "}
-              {stats.totalGlobalDiscount.toFixed(2)} € M+ ·{" "}
-              {stats.totalLoyaltySaved.toFixed(2)} € Club
+            <div className="text-[11px] sm:text-xs text-emerald-700/80 mt-0.5 whitespace-nowrap">
+              {stats.totalImmediateSaved.toFixed(2)} +{" "}
+              {stats.totalGlobalDiscount.toFixed(2)} M+ ·{" "}
+              {stats.totalLoyaltySaved.toFixed(2)} Club
             </div>
           </div>
         </section>
 
-        {/* Main Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
-          <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+        {/* Desktop Tabs (hidden on mobile where bottom nav bar is used) */}
+        <div className="hidden md:flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setActiveTab("duel")}
@@ -567,36 +570,36 @@ export function DashboardClient({
 
         {/* TAB 2: Unified Catalog */}
         {activeTab === "catalog" && (
-          <section className="space-y-4">
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
-              <div className="flex flex-col md:flex-row gap-3">
+          <section className="space-y-3 sm:space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-2xs space-y-2.5 sm:space-y-3">
+              <div className="flex flex-col md:flex-row gap-2.5 sm:gap-3">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Rechercher un produit Carrefour ou Monoprix (ex: sucrine, pain au lait, patate douce, comté, saumon...)"
-                    className="w-full pl-11 pr-10 py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm"
+                    placeholder="Rechercher un produit (sucrine, lait, comté...)"
+                    className="w-full pl-10 sm:pl-11 pr-9 py-2 sm:py-2.5 rounded-xl border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-base sm:text-sm"
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 cursor-pointer"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 cursor-pointer"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <select
                     value={productSort}
                     onChange={(e) =>
                       setProductSort(e.target.value as ProductSort)
                     }
-                    className="px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white text-slate-700 outline-none focus:border-blue-500"
+                    className="flex-1 sm:flex-none px-3 py-2 sm:py-2.5 rounded-xl border border-slate-300 text-base sm:text-sm bg-white text-slate-700 outline-none focus:border-blue-500"
                   >
                     <option value="recent">Tri : Plus récent</option>
                     <option value="name">Tri : Nom A-Z</option>
@@ -605,7 +608,7 @@ export function DashboardClient({
                     <option value="savings">Tri : Gain manuel Monoprix</option>
                   </select>
 
-                  <div className="inline-flex rounded-xl border border-slate-300 p-0.5 bg-slate-50 text-xs font-medium">
+                  <div className="inline-flex rounded-xl border border-slate-300 p-0.5 bg-slate-50 text-xs font-medium shrink-0">
                     <button
                       type="button"
                       onClick={() => setCompareBasis("net")}
@@ -615,7 +618,7 @@ export function DashboardClient({
                           : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
-                      Prix net réel
+                      Prix net
                     </button>
                     <button
                       type="button"
@@ -626,17 +629,17 @@ export function DashboardClient({
                           : "text-slate-600 hover:text-slate-900"
                       }`}
                     >
-                      Prix affiché
+                      Affiché
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5">
+                <div className="flex overflow-x-auto no-scrollbar flex-nowrap sm:flex-wrap items-center gap-1.5 text-xs -mx-1 px-1 pb-0.5">
                   {(
                     [
-                      ["all", "Toutes enseignes"],
+                      ["all", "Toutes"],
                       ["carrefour", "Carrefour"],
                       ["monoprix", "Monoprix"],
                     ] as const
@@ -645,7 +648,7 @@ export function DashboardClient({
                       key={key}
                       type="button"
                       onClick={() => setRetailerFilter(key)}
-                      className={`px-3 py-1.5 rounded-full font-semibold transition cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-full font-semibold transition cursor-pointer shrink-0 ${
                         retailerFilter === key
                           ? key === "monoprix"
                             ? "bg-rose-600 text-white"
@@ -659,21 +662,21 @@ export function DashboardClient({
                     </button>
                   ))}
 
-                  <span className="text-slate-300 px-1">|</span>
+                  <span className="hidden sm:inline text-slate-300 px-1">|</span>
 
                   {(
                     [
                       ["all", "Tous produits"],
-                      ["weighted", "Avec prix au kg / L"],
-                      ["discounts", "Avec promo / M+ / Club"],
-                      ["monoprix", "Prix Monoprix saisi manuellement"],
+                      ["weighted", "Au kg / L"],
+                      ["discounts", "Promos / M+ / Club"],
+                      ["monoprix", "Prix Monop saisi"],
                     ] as const
                   ).map(([key, label]) => (
                     <button
                       key={key}
                       type="button"
                       onClick={() => setProductFilter(key)}
-                      className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer shrink-0 ${
                         productFilter === key
                           ? "bg-blue-100 text-blue-800 border border-blue-300"
                           : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -684,7 +687,7 @@ export function DashboardClient({
                   ))}
                 </div>
 
-                <span className="text-xs text-slate-500">
+                <span className="text-[11px] sm:text-xs text-slate-500 shrink-0">
                   {filteredProducts.length} produit(s)
                 </span>
               </div>
@@ -725,7 +728,7 @@ export function DashboardClient({
                       key={p.key}
                       className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden transition hover:border-slate-300"
                     >
-                      <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div className="p-3 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
                         <div className="space-y-1.5 min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span
@@ -739,7 +742,7 @@ export function DashboardClient({
                             </span>
 
                             {editingNameFor === p.key ? (
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 w-full sm:w-auto">
                                 <input
                                   type="text"
                                   value={customNameDraft}
@@ -748,7 +751,7 @@ export function DashboardClient({
                                   }
                                   placeholder={p.rawLabel}
                                   autoFocus
-                                  className="px-2.5 py-1 rounded-lg border border-blue-400 text-sm font-semibold outline-none"
+                                  className="flex-1 sm:flex-none px-2.5 py-1 rounded-lg border border-blue-400 text-base sm:text-sm font-semibold outline-none"
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter") {
                                       void saveProductNote(p.rawLabel, {
@@ -941,7 +944,7 @@ export function DashboardClient({
                                   }
                                 }}
                                 placeholder="0.00"
-                                className="w-16 px-1.5 py-0.5 rounded-md border border-slate-300 bg-white text-xs font-semibold text-right outline-none focus:border-blue-500"
+                                className="w-20 sm:w-16 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded-md border border-slate-300 bg-white text-base sm:text-xs font-semibold text-right outline-none focus:border-blue-500"
                               />
                               {p.lastPricePerKgOrL !== null ? (
                                 <button
@@ -1106,21 +1109,21 @@ export function DashboardClient({
 
         {/* TAB 3: Receipts & Invoices */}
         {activeTab === "receipts" && (
-          <section className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+          <section className="space-y-3 sm:space-y-4">
+            <div className="flex overflow-x-auto no-scrollbar flex-nowrap sm:flex-wrap items-center gap-1.5 sm:gap-2 text-xs -mx-1 px-1 pb-0.5">
               {(
                 [
                   ["all", `Tous (${receiptsList.length})`],
                   ["market", "Carrefour Market"],
                   ["city", "Carrefour City"],
-                  ["monoprix", `Monoprix.fr Courses (${stats.monoprixCount})`],
+                  ["monoprix", `Monoprix.fr (${stats.monoprixCount})`],
                 ] as const
               ).map(([key, label]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setStoreFilter(key)}
-                  className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer shrink-0 ${
                     storeFilter === key
                       ? key === "monoprix"
                         ? "bg-rose-600 text-white"
@@ -1219,6 +1222,60 @@ export function DashboardClient({
           </section>
         )}
       </main>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav
+        aria-label="Navigation principale"
+        className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(15,23,42,0.06)]"
+      >
+        <div className="grid grid-cols-3 h-14">
+          <button
+            type="button"
+            onClick={() => setActiveTab("duel")}
+            className={`relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition cursor-pointer ${
+              activeTab === "duel"
+                ? "text-blue-600"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <div className="relative">
+              <Swords className="h-5 w-5" />
+              {suggestions.length > 0 && (
+                <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">
+                  {suggestions.length}
+                </span>
+              )}
+            </div>
+            <span>Duels ({comparisons.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("catalog")}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition cursor-pointer ${
+              activeTab === "catalog"
+                ? "text-blue-600"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Search className="h-5 w-5" />
+            <span>Catalogue ({products.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("receipts")}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition cursor-pointer ${
+              activeTab === "receipts"
+                ? "text-blue-600"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <ReceiptIcon className="h-5 w-5" />
+            <span>Tickets ({receiptsList.length})</span>
+          </button>
+        </div>
+      </nav>
 
       {/* Modals */}
       <SyncModal
