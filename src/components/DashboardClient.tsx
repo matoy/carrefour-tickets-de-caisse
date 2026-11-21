@@ -54,7 +54,6 @@ type RetailerFilter = "all" | "carrefour" | "monoprix";
 type ProductFilter = "all" | "discounts" | "weighted" | "monoprix";
 type ProductSort = "recent" | "name" | "price_asc" | "most_bought" | "savings";
 type CompareBasis = "net" | "shelf";
-type StoreFilter = "all" | "market" | "city" | "monoprix";
 
 function formatStoreBadge(
   storeName: string,
@@ -117,7 +116,7 @@ export function DashboardClient({
   const [productFilter, setProductFilter] = useState<ProductFilter>("all");
   const [productSort, setProductSort] = useState<ProductSort>("recent");
   const [compareBasis, setCompareBasis] = useState<CompareBasis>("net");
-  const [storeFilter, setStoreFilter] = useState<StoreFilter>("all");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
 
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [editingNameFor, setEditingNameFor] = useState<string | null>(null);
@@ -363,16 +362,51 @@ export function DashboardClient({
     compareBasis,
   ]);
 
-  const filteredReceipts = useMemo(() => {
-    return receiptsList.filter((r) => {
-      if (storeFilter === "market")
-        return r.retailer === "carrefour" && /market/i.test(r.storeName);
-      if (storeFilter === "city")
-        return r.retailer === "carrefour" && /city/i.test(r.storeName);
-      if (storeFilter === "monoprix") return r.retailer === "monoprix";
-      return true;
+  const storeOptions = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        retailer: "carrefour" | "monoprix";
+        count: number;
+      }
+    >();
+
+    for (const r of receiptsList) {
+      const key = `${r.retailer}::${r.storeName}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, {
+          key,
+          label: r.storeName.replace(/_/g, " "),
+          retailer: r.retailer,
+          count: 1,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.label.localeCompare(b.label, "fr");
     });
-  }, [receiptsList, storeFilter]);
+  }, [receiptsList]);
+
+  const activeStoreFilter = useMemo(() => {
+    if (storeFilter === "all") return "all";
+    return storeOptions.some((o) => o.key === storeFilter)
+      ? storeFilter
+      : "all";
+  }, [storeFilter, storeOptions]);
+
+  const filteredReceipts = useMemo(() => {
+    if (activeStoreFilter === "all") return receiptsList;
+    return receiptsList.filter(
+      (r) => `${r.retailer}::${r.storeName}` === activeStoreFilter
+    );
+  }, [receiptsList, activeStoreFilter]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -1111,29 +1145,40 @@ export function DashboardClient({
         {activeTab === "receipts" && (
           <section className="space-y-3 sm:space-y-4">
             <div className="flex overflow-x-auto no-scrollbar flex-nowrap sm:flex-wrap items-center gap-1.5 sm:gap-2 text-xs -mx-1 px-1 pb-0.5">
-              {(
-                [
-                  ["all", `Tous (${receiptsList.length})`],
-                  ["market", "Carrefour Market"],
-                  ["city", "Carrefour City"],
-                  ["monoprix", `Monoprix.fr (${stats.monoprixCount})`],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setStoreFilter(key)}
-                  className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer shrink-0 ${
-                    storeFilter === key
-                      ? key === "monoprix"
-                        ? "bg-rose-600 text-white"
-                        : "bg-blue-600 text-white"
-                      : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+              <button
+                type="button"
+                onClick={() => setStoreFilter("all")}
+                className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer shrink-0 ${
+                  activeStoreFilter === "all"
+                    ? "bg-slate-900 text-white"
+                    : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                Tous ({receiptsList.length})
+              </button>
+              {storeOptions.map((opt) => {
+                const isSelected = activeStoreFilter === opt.key;
+                const activeClass =
+                  opt.retailer === "monoprix"
+                    ? "bg-rose-600 text-white"
+                    : /city/i.test(opt.label)
+                    ? "bg-lime-600 text-white"
+                    : "bg-blue-600 text-white";
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setStoreFilter(opt.key)}
+                    className={`px-3 py-1.5 rounded-full font-medium transition cursor-pointer shrink-0 ${
+                      isSelected
+                        ? activeClass
+                        : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    {opt.label} ({opt.count})
+                  </button>
+                );
+              })}
             </div>
 
             {filteredReceipts.length === 0 ? (
