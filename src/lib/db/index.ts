@@ -1,4 +1,5 @@
 import path from "node:path";
+import os from "node:os";
 import fs from "node:fs";
 import { sql } from "drizzle-orm";
 import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
@@ -87,7 +88,11 @@ function createDbInstance(): { db: AppDb; isPostgresUrl: boolean } {
   }
 
   if (!globalThis.__pgliteClient) {
-    const pgDataDir = path.join(process.cwd(), ".pgdata");
+    const pgDataDir =
+      process.env.PGLITE_DATA_DIR?.trim() ||
+      (process.env.VERCEL || /onedrive/i.test(process.cwd())
+        ? path.join(os.tmpdir(), "carrefour-tickets-pgdata")
+        : path.join(process.cwd(), ".pgdata"));
     fs.mkdirSync(pgDataDir, { recursive: true });
     // PGlite runs in-process (WASM); a leftover postmaster.pid comes from an abrupt exit/HMR restart.
     const pidFile = path.join(pgDataDir, "postmaster.pid");

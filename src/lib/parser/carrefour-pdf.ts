@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import {
   buildNormalizedLabel,
@@ -74,7 +75,7 @@ async function extractLinesFromPdf(buffer: Buffer): Promise<string[]> {
     "pdf.worker.mjs"
   );
   if (pdfjsLib.GlobalWorkerOptions) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `file:///${workerPath.replace(/\\/g, "/")}`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
   }
 
   const loadingTask = pdfjsLib.getDocument({
