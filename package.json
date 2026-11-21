@@ -1,0 +1,34 @@
+{
+  "name": "carrefour-tickets-de-caisse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Centralisation des tickets de caisse Carrefour et comparateur de prix",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "drizzle-kit push",
+    "verify:parser": "npx tsx scripts/verify-parser.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "@neondatabase/serverless": "^1.2.1",
+    "drizzle-orm": "^0.45.4",
+    "lucide-react": "^1.77.0",
+    "next": "^16.4.6",
+    "pdfjs-dist": "^6.5.438",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "drizzle-kit": "^0.31.11",
+    "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
