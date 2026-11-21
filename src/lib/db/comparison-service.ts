@@ -1,6 +1,10 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { ensureDbInitialized } from "./index";
-import { productComparisons, productComparisonLinks } from "./schema";
+import {
+  dismissedComparisonSuggestions,
+  productComparisons,
+  productComparisonLinks,
+} from "./schema";
 import {
   listAggregatedProducts,
   type AggregatedProduct,
@@ -229,11 +233,12 @@ function formatSuggestedName(monoprixRawLabel: string): string {
 }
 
 /**
- * Compute likely Carrefour <-> Monoprix product pairs not yet linked in any comparison group.
+ * Compute likely Carrefour <-> Monoprix product pairs not yet linked or dismissed.
  */
 export function computeSuggestedMatches(
   products: AggregatedProduct[],
-  existingComparisons: ProductComparisonView[]
+  existingComparisons: ProductComparisonView[],
+  dismissedKeys?: Set<string>
 ): SuggestedComparisonMatch[] {
   const alreadyLinkedCarrefour = new Set<string>();
   const alreadyLinkedMonoprix = new Set<string>();
@@ -268,6 +273,11 @@ export function computeSuggestedMatches(
     let best: SuggestedComparisonMatch | null = null;
 
     for (const mEntry of monoprixTokens) {
+      if (
+        dismissedKeys?.has(`${c.rawLabel}::${mEntry.product.rawLabel}`)
+      ) {
+        continue;
+      }
       if (mEntry.tokens.length === 0) continue;
       const shared = mEntry.tokens.filter((t) => cSet.has(t));
       if (shared.length === 0) continue;
@@ -456,4 +466,42 @@ export async function deleteComparison(id: number): Promise<boolean> {
     .where(eq(productComparisons.id, id))
     .returning({ id: productComparisons.id });
   return deleted.length > 0;
+}
+
+export async function listDismissedSuggestionKeys(): Promise<Set<string>> {
+  const db = await ensureDbInitialized();
+  const rows = await db.select().from(dismissedComparisonSuggestions);
+  return new Set(rows.map((r) => `${r.carrefourLabel}::${r.monoprixLabel}`));
+}
+
+export async function dismissSuggestion(
+  carrefourLabel: string,
+  monoprixLabel: string
+): Promise<void> {
+  const db = await ensureDbInitialized();
+  await db
+    .insert(dismissedComparisonSuggestions)
+    .values({
+      carrefourLabel: carrefourLabel.trim(),
+      monoprixLabel: monoprixLabel.trim(),
+    })
+    .onConflictDoNothing();
+}
+
+export async function undismissSuggestion(
+  carrefourLabel: string,
+  monoprixLabel: string
+): Promise<void> {
+  const db = await ensureDbInitialized();
+  await db
+    .delete(dismissedComparisonSuggestions)
+    .where(
+      and(
+        eq(
+          dismissedComparisonSuggestions.carrefourLabel,
+          carrefourLabel.trim()
+        ),
+        eq(dismissedComparisonSuggestions.monoprixLabel, monoprixLabel.trim())
+      )
+    );
 }

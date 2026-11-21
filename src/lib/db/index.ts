@@ -85,6 +85,13 @@ const SCHEMA_STATEMENTS = [
     raw_label TEXT NOT NULL
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_comparison_link_unique ON product_comparison_links(comparison_id, retailer, raw_label)`,
+  `CREATE TABLE IF NOT EXISTS dismissed_comparison_suggestions (
+    id SERIAL PRIMARY KEY,
+    carrefour_label TEXT NOT NULL,
+    monoprix_label TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_dismissed_suggestion_unique ON dismissed_comparison_suggestions(carrefour_label, monoprix_label)`,
   `CREATE TABLE IF NOT EXISTS sync_settings (
     id SERIAL PRIMARY KEY,
     key TEXT NOT NULL UNIQUE,

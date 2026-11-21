@@ -16,6 +16,7 @@ import {
 import {
   computeSuggestedMatches,
   listComparisonsWithPrices,
+  undismissSuggestion,
 } from "../src/lib/db/comparison-service";
 import { closeDb, ensureDbInitialized } from "../src/lib/db";
 import { GET as getReceiptsRoute } from "../src/app/api/receipts/route";
@@ -26,6 +27,7 @@ import {
   GET as getComparisonsRoute,
   POST as postComparisonRoute,
 } from "../src/app/api/comparisons/route";
+import { POST as postDismissSuggestionRoute } from "../src/app/api/comparisons/dismiss/route";
 import {
   PATCH as patchComparisonRoute,
   DELETE as deleteComparisonRoute,
@@ -304,7 +306,38 @@ async function main() {
       { params: Promise.resolve({ id: String(createdJson.id) }) }
     );
     assert.equal(delCompRes.status, 200);
+
+    // Test dismissing an automatic suggestion via API
+    const dismissRes = await postDismissSuggestionRoute(
+      new NextRequest("http://localhost:3000/api/comparisons/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          carrefourLabel: "SUCRINE BARQUETTE",
+          monoprixLabel: "Cœur de Sucrine x3",
+        }),
+      })
+    );
+    assert.equal(dismissRes.status, 200);
+
+    const afterDismissRes = await getComparisonsRoute(
+      new NextRequest("http://localhost:3000/api/comparisons")
+    );
+    assert.equal(afterDismissRes.status, 200);
+    const afterDismissJson = (await afterDismissRes.json()) as {
+      suggestions: Array<{
+        carrefourProduct: { rawLabel: string };
+        monoprixProduct: { rawLabel: string };
+      }>;
+    };
+    const stillSuggested = afterDismissJson.suggestions.find(
+      (s) =>
+        s.carrefourProduct.rawLabel === "SUCRINE BARQUETTE" &&
+        s.monoprixProduct.rawLabel === "Cœur de Sucrine x3"
+    );
+    assert.equal(stillSuggested, undefined, "Dismissed suggestion must not reappear");
   } finally {
+    await undismissSuggestion("SUCRINE BARQUETTE", "Cœur de Sucrine x3").catch(() => {});
     // Remove synthetic Monoprix test receipt so local dev DB stays clean
     if (monoInsert.inserted && monoInsert.receiptId !== null) {
       await deleteReceiptRoute(

@@ -4,6 +4,7 @@ import {
   computeSuggestedMatches,
   createComparison,
   listComparisonsWithPrices,
+  listDismissedSuggestionKeys,
   type CompareMode,
 } from "@/lib/db/comparison-service";
 import { listAggregatedProducts } from "@/lib/db/receipt-service";
@@ -14,9 +15,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const products = await listAggregatedProducts();
+    const [products, dismissedKeys] = await Promise.all([
+      listAggregatedProducts(),
+      listDismissedSuggestionKeys(),
+    ]);
     const comparisons = await listComparisonsWithPrices(products);
-    const suggestions = computeSuggestedMatches(products, comparisons);
+    const suggestions = computeSuggestedMatches(
+      products,
+      comparisons,
+      dismissedKeys
+    );
     return NextResponse.json({ comparisons, suggestions });
   } catch (err) {
     console.error("GET /api/comparisons error:", err);

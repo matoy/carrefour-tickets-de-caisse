@@ -60,6 +60,7 @@ export function DuelComparisonTab({
   const [selectedMonoprix, setSelectedMonoprix] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
 
   const carrefourProducts = useMemo(
     () => products.filter((p) => p.retailer === "carrefour"),
@@ -153,7 +154,8 @@ export function DuelComparisonTab({
   }
 
   async function handleAcceptSuggestion(s: SuggestedComparisonMatch) {
-    setBusyKey(s.monoprixProduct.rawLabel);
+    const key = `${s.carrefourProduct.rawLabel}::${s.monoprixProduct.rawLabel}`;
+    setBusyKey(key);
     try {
       const res = await fetch("/api/comparisons", {
         method: "POST",
@@ -163,6 +165,26 @@ export function DuelComparisonTab({
           compareMode: s.recommendedMode,
           carrefourLabels: [s.carrefourProduct.rawLabel],
           monoprixLabels: [s.monoprixProduct.rawLabel],
+        }),
+      });
+      if (res.ok) {
+        onComparisonsChanged();
+      }
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function handleDismissSuggestion(s: SuggestedComparisonMatch) {
+    const key = `${s.carrefourProduct.rawLabel}::${s.monoprixProduct.rawLabel}`;
+    setBusyKey(key);
+    try {
+      const res = await fetch("/api/comparisons/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          carrefourLabel: s.carrefourProduct.rawLabel,
+          monoprixLabel: s.monoprixProduct.rawLabel,
         }),
       });
       if (res.ok) {
@@ -443,69 +465,98 @@ export function DuelComparisonTab({
       {/* Automatic suggestions */}
       {suggestions.length > 0 && (
         <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-bold text-amber-950">
               <Sparkles className="h-4 w-4 text-amber-600" />
               <span>
                 Associations automatiques détectées ({suggestions.length})
               </span>
             </div>
-            <span className="text-xs text-amber-800">
-              Validez en 1 clic pour comparer ces paires dans votre tableau
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-amber-800">
+                Validez ou ignorez en 1 clic
+              </span>
+              {suggestions.length > 6 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllSuggestions((v) => !v)}
+                  className="text-xs font-semibold text-amber-900 underline hover:text-amber-700 cursor-pointer"
+                >
+                  {showAllSuggestions
+                    ? "Afficher moins"
+                    : `Tout voir (${suggestions.length})`}
+                </button>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
-            {suggestions.slice(0, 6).map((s) => {
-              const cPrice =
-                s.recommendedMode === "per_kg_or_l" &&
-                s.carrefourProduct.lastNetPricePerKgOrL !== null
-                  ? `${s.carrefourProduct.lastNetPricePerKgOrL.toFixed(2)} €/${
-                      s.carrefourProduct.unitType === "L" ? "L" : "kg"
-                    }`
-                  : `${s.carrefourProduct.lastNetUnitPrice.toFixed(2)} €`;
-              const mPrice =
-                s.recommendedMode === "per_kg_or_l" &&
-                s.monoprixProduct.lastNetPricePerKgOrL !== null
-                  ? `${s.monoprixProduct.lastNetPricePerKgOrL.toFixed(2)} €/${
-                      s.monoprixProduct.unitType === "L" ? "L" : "kg"
-                    }`
-                  : `${s.monoprixProduct.lastNetUnitPrice.toFixed(2)} €`;
+            {(showAllSuggestions ? suggestions : suggestions.slice(0, 6)).map(
+              (s) => {
+                const pairKey = `${s.carrefourProduct.rawLabel}::${s.monoprixProduct.rawLabel}`;
+                const isBusy = busyKey === pairKey;
+                const cPrice =
+                  s.recommendedMode === "per_kg_or_l" &&
+                  s.carrefourProduct.lastNetPricePerKgOrL !== null
+                    ? `${s.carrefourProduct.lastNetPricePerKgOrL.toFixed(2)} €/${
+                        s.carrefourProduct.unitType === "L" ? "L" : "kg"
+                      }`
+                    : `${s.carrefourProduct.lastNetUnitPrice.toFixed(2)} €`;
+                const mPrice =
+                  s.recommendedMode === "per_kg_or_l" &&
+                  s.monoprixProduct.lastNetPricePerKgOrL !== null
+                    ? `${s.monoprixProduct.lastNetPricePerKgOrL.toFixed(2)} €/${
+                        s.monoprixProduct.unitType === "L" ? "L" : "kg"
+                      }`
+                    : `${s.monoprixProduct.lastNetUnitPrice.toFixed(2)} €`;
 
-              return (
-                <div
-                  key={`${s.carrefourProduct.rawLabel}::${s.monoprixProduct.rawLabel}`}
-                  className="bg-white rounded-xl border border-amber-200/80 p-3 flex items-center justify-between gap-3"
-                >
-                  <div className="min-w-0 space-y-1 text-xs">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
-                        Carrefour : {cPrice}
-                      </span>
-                      <span className="truncate font-medium text-slate-800">
-                        {s.carrefourProduct.rawLabel}
-                      </span>
+                return (
+                  <div
+                    key={pairKey}
+                    className="bg-white rounded-xl border border-amber-200/80 p-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 space-y-1 text-xs">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold">
+                          Carrefour : {cPrice}
+                        </span>
+                        <span className="truncate font-medium text-slate-800">
+                          {s.carrefourProduct.rawLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-semibold">
+                          Monoprix : {mPrice}
+                        </span>
+                        <span className="truncate font-medium text-slate-800">
+                          {s.monoprixProduct.rawLabel}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-semibold">
-                        Monoprix : {mPrice}
-                      </span>
-                      <span className="truncate font-medium text-slate-800">
-                        {s.monoprixProduct.rawLabel}
-                      </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleAcceptSuggestion(s)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        <span>Valider</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleDismissSuggestion(s)}
+                        title="Ne pas associer ces deux produits"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer disabled:opacity-50"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        <span>Ignorer</span>
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={busyKey === s.monoprixProduct.rawLabel}
-                    onClick={() => handleAcceptSuggestion(s)}
-                    className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    <span>Valider</span>
-                  </button>
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </div>
         </div>
       )}

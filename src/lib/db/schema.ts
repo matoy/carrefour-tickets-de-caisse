@@ -140,6 +140,22 @@ export const syncSettings = pgTable("sync_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const dismissedComparisonSuggestions = pgTable(
+  "dismissed_comparison_suggestions",
+  {
+    id: serial("id").primaryKey(),
+    carrefourLabel: text("carrefour_label").notNull(),
+    monoprixLabel: text("monoprix_label").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_dismissed_suggestion_unique").on(
+      table.carrefourLabel,
+      table.monoprixLabel
+    ),
+  ]
+);
+
 export type Receipt = typeof receipts.$inferSelect;
 export type NewReceipt = typeof receipts.$inferInsert;
 export type ReceiptItem = typeof receiptItems.$inferSelect;
@@ -147,4 +163,6 @@ export type NewReceiptItem = typeof receiptItems.$inferInsert;
 export type ProductNote = typeof productNotes.$inferSelect;
 export type ProductComparison = typeof productComparisons.$inferSelect;
 export type ProductComparisonLink = typeof productComparisonLinks.$inferSelect;
+export type DismissedComparisonSuggestion =
+  typeof dismissedComparisonSuggestions.$inferSelect;
 export type SyncSetting = typeof syncSettings.$inferSelect;

@@ -8,6 +8,7 @@ import {
 import {
   computeSuggestedMatches,
   listComparisonsWithPrices,
+  listDismissedSuggestionKeys,
 } from "@/lib/db/comparison-service";
 import { DashboardClient } from "@/components/DashboardClient";
 
@@ -19,12 +20,17 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const [{ receipts, stats }, products] = await Promise.all([
+  const [{ receipts, stats }, products, dismissedKeys] = await Promise.all([
     listReceipts(true),
     listAggregatedProducts(),
+    listDismissedSuggestionKeys(),
   ]);
   const comparisons = await listComparisonsWithPrices(products);
-  const suggestions = computeSuggestedMatches(products, comparisons);
+  const suggestions = computeSuggestedMatches(
+    products,
+    comparisons,
+    dismissedKeys
+  );
 
   return (
     <DashboardClient
