@@ -11,6 +11,7 @@ import {
   listDismissedSuggestionKeys,
 } from "@/lib/db/comparison-service";
 import { DashboardClient } from "@/components/DashboardClient";
+import { DEFAULT_TIME_PERIOD, getPeriodStartDate } from "@/lib/period";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,14 @@ export default async function HomePage() {
     redirect("/login");
   }
 
+  const since = getPeriodStartDate(DEFAULT_TIME_PERIOD);
+
   const [{ receipts, stats }, products, dismissedKeys] = await Promise.all([
-    listReceipts(true),
-    listAggregatedProducts(),
+    listReceipts(true, since),
+    listAggregatedProducts(undefined, undefined, since),
     listDismissedSuggestionKeys(),
   ]);
-  const comparisons = await listComparisonsWithPrices(products);
+  const comparisons = await listComparisonsWithPrices(products, since !== null);
   const suggestions = computeSuggestedMatches(
     products,
     comparisons,
@@ -39,6 +42,7 @@ export default async function HomePage() {
       initialProducts={products}
       initialComparisons={comparisons}
       initialSuggestions={suggestions}
+      initialPeriod={DEFAULT_TIME_PERIOD}
       authEnabled={isAuthEnabled()}
       isRemotePostgres={isUsingRemotePostgres()}
     />

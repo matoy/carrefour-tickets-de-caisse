@@ -8,6 +8,7 @@ import {
   type CompareMode,
 } from "@/lib/db/comparison-service";
 import { listAggregatedProducts } from "@/lib/db/receipt-service";
+import { getPeriodStartDate, parseTimePeriod } from "@/lib/period";
 
 export async function GET(request: NextRequest) {
   if (!isApiRequestAuthenticated(request)) {
@@ -15,11 +16,20 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const period = parseTimePeriod(
+      request.nextUrl.searchParams.get("period"),
+      "all"
+    );
+    const since = getPeriodStartDate(period);
+
     const [products, dismissedKeys] = await Promise.all([
-      listAggregatedProducts(),
+      listAggregatedProducts(undefined, undefined, since),
       listDismissedSuggestionKeys(),
     ]);
-    const comparisons = await listComparisonsWithPrices(products);
+    const comparisons = await listComparisonsWithPrices(
+      products,
+      since !== null
+    );
     const suggestions = computeSuggestedMatches(
       products,
       comparisons,

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, gte, inArray } from "drizzle-orm";
 import { ensureDbInitialized } from "./index";
 import {
   receipts,
@@ -291,17 +291,21 @@ function toRetailer(val: string | null | undefined): Retailer {
   return val === "monoprix" ? "monoprix" : "carrefour";
 }
 
-export async function listReceipts(includeItems = false): Promise<{
+export async function listReceipts(
+  includeItems = false,
+  since?: Date | null
+): Promise<{
   receipts: ReceiptListItem[];
   stats: ReceiptStatsSummary;
 }> {
   await autoSeedIfEmpty();
   const db = await ensureDbInitialized();
 
-  const rows = await db
-    .select()
-    .from(receipts)
-    .orderBy(desc(receipts.purchaseDate));
+  const baseQuery = db.select().from(receipts);
+  const rows = await (since
+    ? baseQuery.where(gte(receipts.purchaseDate, since))
+    : baseQuery
+  ).orderBy(desc(receipts.purchaseDate));
 
   const allItems =
     rows.length > 0
@@ -464,12 +468,13 @@ export interface AggregatedProduct {
 
 export async function listAggregatedProducts(
   query?: string,
-  retailerFilter?: Retailer | "all"
+  retailerFilter?: Retailer | "all",
+  since?: Date | null
 ): Promise<AggregatedProduct[]> {
   await autoSeedIfEmpty();
   const db = await ensureDbInitialized();
 
-  const joined = await db
+  const baseJoined = db
     .select({
       item: receiptItems,
       receipt: {
@@ -481,8 +486,12 @@ export async function listAggregatedProducts(
       },
     })
     .from(receiptItems)
-    .innerJoin(receipts, eq(receiptItems.receiptId, receipts.id))
-    .orderBy(desc(receipts.purchaseDate));
+    .innerJoin(receipts, eq(receiptItems.receiptId, receipts.id));
+
+  const joined = await (since
+    ? baseJoined.where(gte(receipts.purchaseDate, since))
+    : baseJoined
+  ).orderBy(desc(receipts.purchaseDate));
 
   const noteRows = await db.select().from(productNotes);
   const notesMap = new Map(noteRows.map((n) => [n.rawLabel, n]));

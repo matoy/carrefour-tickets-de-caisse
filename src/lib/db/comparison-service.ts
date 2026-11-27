@@ -154,7 +154,8 @@ function evaluateBasis(
 }
 
 export async function listComparisonsWithPrices(
-  preloadedProducts?: AggregatedProduct[]
+  preloadedProducts?: AggregatedProduct[],
+  onlyWithProducts = false
 ): Promise<ProductComparisonView[]> {
   const db = await ensureDbInitialized();
   const products = preloadedProducts ?? (await listAggregatedProducts());
@@ -184,7 +185,7 @@ export async function listComparisonsWithPrices(
     linksByComp.set(link.comparisonId, list);
   }
 
-  return compRows.map((comp) => {
+  const views = compRows.map((comp) => {
     const compareMode: CompareMode =
       comp.compareMode === "per_kg_or_l" ? "per_kg_or_l" : "unit";
     const links = linksByComp.get(comp.id) ?? [];
@@ -226,6 +227,13 @@ export async function listComparisonsWithPrices(
       ),
     };
   });
+
+  if (onlyWithProducts) {
+    return views.filter(
+      (c) => c.carrefourProduct !== null || c.monoprixProduct !== null
+    );
+  }
+  return views;
 }
 
 function formatSuggestedName(monoprixRawLabel: string): string {

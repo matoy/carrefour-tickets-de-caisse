@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isApiRequestAuthenticated } from "@/lib/auth";
 import { listAggregatedProducts } from "@/lib/db/receipt-service";
 import type { Retailer } from "@/lib/parser";
+import { getPeriodStartDate, parseTimePeriod } from "@/lib/period";
 
 export async function GET(request: NextRequest) {
   if (!isApiRequestAuthenticated(request)) {
@@ -15,8 +16,13 @@ export async function GET(request: NextRequest) {
       rawRetailer === "carrefour" || rawRetailer === "monoprix"
         ? rawRetailer
         : undefined;
+    const period = parseTimePeriod(
+      request.nextUrl.searchParams.get("period"),
+      "all"
+    );
+    const since = getPeriodStartDate(period);
 
-    const products = await listAggregatedProducts(q, retailerFilter);
+    const products = await listAggregatedProducts(q, retailerFilter, since);
     return NextResponse.json({ products });
   } catch (err) {
     console.error("GET /api/products error:", err);

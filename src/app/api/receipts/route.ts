@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isApiRequestAuthenticated } from "@/lib/auth";
 import { listReceipts } from "@/lib/db/receipt-service";
+import { getPeriodStartDate, parseTimePeriod } from "@/lib/period";
 
 export async function GET(request: NextRequest) {
   if (!isApiRequestAuthenticated(request)) {
@@ -10,7 +11,12 @@ export async function GET(request: NextRequest) {
   try {
     const includeItems =
       request.nextUrl.searchParams.get("includeItems") === "true";
-    const data = await listReceipts(includeItems);
+    const period = parseTimePeriod(
+      request.nextUrl.searchParams.get("period"),
+      "all"
+    );
+    const since = getPeriodStartDate(period);
+    const data = await listReceipts(includeItems, since);
     return NextResponse.json(data);
   } catch (err) {
     console.error("GET /api/receipts error:", err);

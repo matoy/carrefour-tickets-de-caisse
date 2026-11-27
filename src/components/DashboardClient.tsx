@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -35,6 +35,11 @@ import type {
   SuggestedComparisonMatch,
 } from "@/lib/db/comparison-service";
 import { stripAccents } from "@/lib/parser/normalize";
+import {
+  DEFAULT_TIME_PERIOD,
+  TIME_PERIOD_OPTIONS,
+  type TimePeriod,
+} from "@/lib/period";
 import { SyncModal } from "./SyncModal";
 import { BackupModal } from "./BackupModal";
 import { ReceiptDetailModal } from "./ReceiptDetailModal";
@@ -46,6 +51,7 @@ interface DashboardClientProps {
   initialProducts: AggregatedProduct[];
   initialComparisons: ProductComparisonView[];
   initialSuggestions: SuggestedComparisonMatch[];
+  initialPeriod?: TimePeriod;
   authEnabled: boolean;
   isRemotePostgres: boolean;
 }
@@ -93,10 +99,13 @@ export function DashboardClient({
   initialProducts,
   initialComparisons,
   initialSuggestions,
+  initialPeriod = DEFAULT_TIME_PERIOD,
   authEnabled,
   isRemotePostgres,
 }: DashboardClientProps) {
   const router = useRouter();
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(initialPeriod);
+  const fetchSeqRef = useRef(0);
   const [receiptsList, setReceiptsList] =
     useState<ReceiptListItem[]>(initialReceipts);
   const [stats, setStats] = useState<ReceiptStatsSummary>(initialStats);
@@ -139,14 +148,19 @@ export function DashboardClient({
     useState<ReceiptListItem | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  async function refreshAllData() {
+  async function refreshAllData(periodOverride?: TimePeriod) {
+    const targetPeriod = periodOverride ?? timePeriod;
+    const seq = ++fetchSeqRef.current;
     setRefreshing(true);
     try {
+      const qs = `period=${encodeURIComponent(targetPeriod)}`;
       const [recRes, prodRes, compRes] = await Promise.all([
-        fetch("/api/receipts?includeItems=true"),
-        fetch("/api/products"),
-        fetch("/api/comparisons"),
+        fetch(`/api/receipts?includeItems=true&${qs}`),
+        fetch(`/api/products?${qs}`),
+        fetch(`/api/comparisons?${qs}`),
       ]);
+      if (seq !== fetchSeqRef.current) return;
+
       if (recRes.ok) {
         const recData = (await recRes.json()) as {
           receipts: ReceiptListItem[];
@@ -183,12 +197,17 @@ export function DashboardClient({
         setSuggestions(compData.suggestions);
       }
     } finally {
-      setRefreshing(false);
+      if (seq === fetchSeqRef.current) {
+        setRefreshing(false);
+      }
     }
   }
 
-  async function refreshComparisonsOnly() {
-    const compRes = await fetch("/api/comparisons");
+  async function refreshComparisonsOnly(periodOverride?: TimePeriod) {
+    const targetPeriod = periodOverride ?? timePeriod;
+    const compRes = await fetch(
+      `/api/comparisons?period=${encodeURIComponent(targetPeriod)}`
+    );
     if (compRes.ok) {
       const compData = (await compRes.json()) as {
         comparisons: ProductComparisonView[];
@@ -197,6 +216,12 @@ export function DashboardClient({
       setComparisons(compData.comparisons);
       setSuggestions(compData.suggestions);
     }
+  }
+
+  function handleChangePeriod(nextPeriod: TimePeriod) {
+    if (nextPeriod === timePeriod) return;
+    setTimePeriod(nextPeriod);
+    void refreshAllData(nextPeriod);
   }
 
   async function saveProductNote(
@@ -486,8 +511,50 @@ export function DashboardClient({
       </header>
 
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-6 pb-24 md:pb-6 space-y-4 sm:space-y-6">
+        {/* Global Time Period Filter (KPIs + Search/Catalog + Duels + Receipts) */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+            <Calendar className="h-3.5 w-3.5 text-blue-600" />
+            <span>Période</span>
+            {refreshing && (
+              <span className="text-[11px] font-normal text-slate-400">
+                · Mise à jour...
+              </span>
+            )}
+          </div>
+          <div
+            role="group"
+            aria-label="Filtrer par période"
+            className="inline-flex items-center rounded-xl bg-white border border-slate-200 p-0.5 shadow-2xs"
+          >
+            {TIME_PERIOD_OPTIONS.map((opt) => {
+              const active = timePeriod === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleChangePeriod(opt.value)}
+                  aria-pressed={active}
+                  className={`px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer ${
+                    active
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  }`}
+                >
+                  <span className="sm:hidden">{opt.shortLabel}</span>
+                  <span className="hidden sm:inline">{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* KPI Cards — horizontal swipe strip on mobile, 2/4-col grid on desktop */}
-        <section className="flex overflow-x-auto no-scrollbar snap-x gap-2.5 -mx-3 px-3 pb-1 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4 sm:overflow-visible">
+        <section
+          className={`flex overflow-x-auto no-scrollbar snap-x gap-2.5 -mx-3 px-3 pb-1 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4 sm:overflow-visible transition-opacity ${
+            refreshing ? "opacity-70" : "opacity-100"
+          }`}
+        >
           <div className="min-w-[146px] sm:min-w-0 snap-start shrink-0 bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-2.5 sm:p-4 shadow-2xs">
             <div className="text-[11px] sm:text-xs font-medium text-slate-500 flex items-center justify-between gap-2">
               <span>Documents</span>
