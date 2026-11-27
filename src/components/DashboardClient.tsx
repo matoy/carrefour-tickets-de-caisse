@@ -106,11 +106,7 @@ export function DashboardClient({
   const [suggestions, setSuggestions] =
     useState<SuggestedComparisonMatch[]>(initialSuggestions);
 
-  const [activeTab, setActiveTab] = useState<MainTab>(
-    initialComparisons.length > 0 || initialStats.monoprixCount > 0
-      ? "duel"
-      : "catalog"
-  );
+  const [activeTab, setActiveTab] = useState<MainTab>("catalog");
   const [searchQuery, setSearchQuery] = useState("");
   const [retailerFilter, setRetailerFilter] = useState<RetailerFilter>("all");
   const [productFilter, setProductFilter] = useState<ProductFilter>("all");
@@ -540,6 +536,19 @@ export function DashboardClient({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => setActiveTab("catalog")}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+                activeTab === "catalog"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Search className="h-4 w-4" />
+              <span>Catalogue & Recherche ({products.length})</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab("duel")}
               className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
                 activeTab === "duel"
@@ -556,19 +565,6 @@ export function DashboardClient({
                   +{suggestions.length}
                 </span>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("catalog")}
-              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-                activeTab === "catalog"
-                  ? "border-blue-600 text-blue-700"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              <Search className="h-4 w-4" />
-              <span>Catalogue & Recherche ({products.length})</span>
             </button>
 
             <button
@@ -1276,6 +1272,19 @@ export function DashboardClient({
         <div className="grid grid-cols-3 h-14">
           <button
             type="button"
+            onClick={() => setActiveTab("catalog")}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition cursor-pointer ${
+              activeTab === "catalog"
+                ? "text-blue-600"
+                : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            <Search className="h-5 w-5" />
+            <span>Catalogue ({products.length})</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("duel")}
             className={`relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition cursor-pointer ${
               activeTab === "duel"
@@ -1292,19 +1301,6 @@ export function DashboardClient({
               )}
             </div>
             <span>Duels ({comparisons.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("catalog")}
-            className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition cursor-pointer ${
-              activeTab === "catalog"
-                ? "text-blue-600"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <Search className="h-5 w-5" />
-            <span>Catalogue ({products.length})</span>
           </button>
 
           <button
