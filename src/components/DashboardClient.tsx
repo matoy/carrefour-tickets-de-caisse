@@ -36,6 +36,7 @@ import type {
 } from "@/lib/db/comparison-service";
 import { stripAccents } from "@/lib/parser/normalize";
 import { SyncModal } from "./SyncModal";
+import { BackupModal } from "./BackupModal";
 import { ReceiptDetailModal } from "./ReceiptDetailModal";
 import { DuelComparisonTab } from "./DuelComparisonTab";
 
@@ -133,6 +134,7 @@ export function DashboardClient({
     useState<AggregatedProduct | null>(null);
 
   const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] =
     useState<ReceiptListItem | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -446,6 +448,17 @@ export function DashboardClient({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setBackupModalOpen(true)}
+              title="Exporter / Importer la sauvegarde BDD (.json.gz)"
+              aria-label="Sauvegarde BDD"
+              className="inline-flex items-center gap-1.5 sm:gap-2 p-2 sm:px-3.5 sm:py-2.5 rounded-lg sm:rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold shadow-2xs transition cursor-pointer"
+            >
+              <Database className="h-4 w-4 text-indigo-600" />
+              <span className="hidden sm:inline">Sauvegarde</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setSyncModalOpen(true)}
@@ -1326,6 +1339,14 @@ export function DashboardClient({
           void refreshAllData();
         }}
         lastSyncAt={stats.lastSyncAt}
+      />
+
+      <BackupModal
+        open={backupModalOpen}
+        onClose={() => setBackupModalOpen(false)}
+        onImportSuccess={() => {
+          void refreshAllData();
+        }}
       />
 
       <ReceiptDetailModal
