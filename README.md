@@ -13,7 +13,10 @@ Application web **Next.js (App Router) + PostgreSQL (Drizzle ORM)** pour central
 - **Catalogue & Recherche unifiée** :
   - Recherche instantanée multi-mots insensible aux accents et abréviations Carrefour (`ORAN` → `ORANGE`, `S/LACT` → `SANS LACTOSE`, `DCH` → `DOUCHE`, etc.) avec filtre par enseigne.
 - **Mes Tickets & Factures** :
-  - Historique chronologique par enseigne (Carrefour Market, Carrefour City, Monoprix.fr Courses) avec détail complet.
+  - Historique chronologique par magasin (Carrefour Market, Carrefour City, Paris Auteuil, Monoprix.fr Courses...) avec détail complet.
+- **Sauvegarde & Restauration compressée (`.json.gz`)** :
+  - Export complet de la base (tickets, articles, notes, duels, suggestions ignorées, texte masqué) compressé en `.json.gz`.
+  - Import avec aperçu préalable (*dry-run*), mode **Fusion** (sans perte) ou **Remplacement complet**.
 
 ## Démarrage en local
 

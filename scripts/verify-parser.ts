@@ -32,6 +32,8 @@ import {
   PATCH as patchComparisonRoute,
   DELETE as deleteComparisonRoute,
 } from "../src/app/api/comparisons/[id]/route";
+import { GET as getBackupExportRoute } from "../src/app/api/backup/export/route";
+import { POST as postBackupImportRoute } from "../src/app/api/backup/import/route";
 
 function makeMonoprixRow(
   y: number,
@@ -389,7 +391,88 @@ async function main() {
     })
   );
 
-  console.log("ALL CARREFOUR + MONOPRIX PARSER, DB & DUEL API CHECKS PASSED!");
+  console.log("4. Testing compressed .json.gz database export & import (preview, merge, replace)...");
+  const exportRes = await getBackupExportRoute(
+    new NextRequest("http://localhost:3000/api/backup/export")
+  );
+  assert.equal(exportRes.status, 200);
+  assert.equal(exportRes.headers.get("Content-Type"), "application/gzip");
+  const gzipBytes = Buffer.from(await exportRes.arrayBuffer());
+  assert.ok(gzipBytes.length > 100);
+  assert.equal(gzipBytes[0], 0x1f);
+  assert.equal(gzipBytes[1], 0x8b);
+
+  const makeBackupFormRequest = (
+    fileBytes: Buffer,
+    fileName: string,
+    dryRun: boolean,
+    mode: "merge" | "replace"
+  ) => {
+    const fd = new FormData();
+    fd.append(
+      "file",
+      new File([new Uint8Array(fileBytes)], fileName, {
+        type: "application/gzip",
+      })
+    );
+    fd.append("dryRun", dryRun ? "true" : "false");
+    fd.append("mode", mode);
+    return new NextRequest("http://localhost:3000/api/backup/import", {
+      method: "POST",
+      body: fd,
+    });
+  };
+
+  // Dry-run preview
+  const previewRes = await postBackupImportRoute(
+    makeBackupFormRequest(gzipBytes, "backup.json.gz", true, "merge")
+  );
+  assert.equal(previewRes.status, 200);
+  const previewJson = (await previewRes.json()) as {
+    dryRun: boolean;
+    preview: {
+      archive: { receipts: number };
+      mergeDiff: { newReceipts: number; skippedReceipts: number };
+    };
+  };
+  assert.equal(previewJson.dryRun, true);
+  assert.equal(previewJson.preview.archive.receipts, 3);
+  assert.equal(previewJson.preview.mergeDiff.newReceipts, 0);
+  assert.equal(previewJson.preview.mergeDiff.skippedReceipts, 3);
+
+  // Merge mode (idempotent)
+  const mergeRes = await postBackupImportRoute(
+    makeBackupFormRequest(gzipBytes, "backup.json.gz", false, "merge")
+  );
+  assert.equal(mergeRes.status, 200);
+  const mergeJson = (await mergeRes.json()) as {
+    report: { insertedReceipts: number; skippedReceipts: number };
+  };
+  assert.equal(mergeJson.report.insertedReceipts, 0);
+  assert.equal(mergeJson.report.skippedReceipts, 3);
+
+  // Replace mode (full wipe & restore)
+  const replaceRes = await postBackupImportRoute(
+    makeBackupFormRequest(gzipBytes, "backup.json.gz", false, "replace")
+  );
+  assert.equal(replaceRes.status, 200);
+  const replaceJson = (await replaceRes.json()) as {
+    report: { insertedReceipts: number };
+  };
+  assert.equal(replaceJson.report.insertedReceipts, 3);
+
+  const afterReplace = await listReceipts(true);
+  assert.equal(afterReplace.receipts.length, 3);
+  assert.equal(afterReplace.stats.totalSpent, 173.18);
+
+  // Invalid file must return 400
+  const invalidRes = await postBackupImportRoute(
+    makeBackupFormRequest(Buffer.from("not a backup"), "bad.json.gz", true, "merge")
+  );
+  assert.equal(invalidRes.status, 400);
+  console.log("  OK Compressed .json.gz export, dry-run preview, merge & replace verified!");
+
+  console.log("ALL CARREFOUR + MONOPRIX PARSER, DB, BACKUP & DUEL API CHECKS PASSED!");
   await closeDb();
   process.exit(0);
 }
